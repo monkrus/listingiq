@@ -14,9 +14,144 @@ export interface ScrapedListing extends ListingInput {
   scrapeError?: string
 }
 
+/** Extract the numeric listing ID from an Airbnb URL */
+function extractListingId(url: string): string | null {
+  const match = url.match(/rooms\/(\d+)/)
+  return match?.[1] ?? null
+}
+
 /**
- * Fetch-based scraper — extracts listing data from Airbnb's server-rendered HTML.
- * Works on Vercel without Playwright.
+ * API-based scraper — uses Airbnb's public StaysPdpSections endpoint.
+ * More reliable from server IPs than HTML scraping.
+ */
+async function apiScrape(url: string): Promise<ScrapedListing> {
+  const base: ScrapedListing = {
+    url,
+    isDemo: false,
+    scrapedAt: new Date().toISOString(),
+    scrapeSuccess: false,
+  }
+
+  const listingId = extractListingId(url)
+  if (!listingId) {
+    return { ...base, scrapeError: 'Could not extract listing ID from URL' }
+  }
+
+  const API_KEY = 'd306zoyjsyarp7ifhu67rjxn52tv0t20'
+  const apiUrl = `https://www.airbnb.com/api/v3/StaysPdpSections/d1d64f8a2ace16cd48e7a88e7e1f12cca413fa53ff4a3c8b5d20e7ec733361d0?operationName=StaysPdpSections&locale=en&currency=USD&variables=%7B%22id%22%3A%22StaysListing%3A${listingId}%22%2C%22pdpSectionsRequest%22%3A%7B%22adults%22%3A%221%22%2C%22layouts%22%3A%5B%22SIDEBAR%22%2C%22SINGLE_COLUMN%22%5D%7D%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d1d64f8a2ace16cd48e7a88e7e1f12cca413fa53ff4a3c8b5d20e7ec733361d0%22%7D%7D`
+
+  try {
+    const res = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'X-Airbnb-Api-Key': API_KEY,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    if (!res.ok) {
+      console.warn(`[scraper:api] API returned ${res.status}`)
+      return { ...base, scrapeError: `API HTTP ${res.status}` }
+    }
+
+    const json = await res.json()
+    const dataStr = JSON.stringify(json)
+
+    // Extract title
+    let title = ''
+    const titleMatch = dataStr.match(/"title":\s*"([^"]{5,100})"/)
+    if (titleMatch) title = titleMatch[1]
+
+    // Extract description
+    let description = ''
+    const descPatterns = [
+      /"htmlDescription":\s*\{[^}]*"htmlText":\s*"([^"]+)"/,
+      /"description":\s*"([^"]{50,})"/,
+    ]
+    for (const pattern of descPatterns) {
+      const match = dataStr.match(pattern)
+      if (match) {
+        description = match[1]
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .replace(/\\n/g, '\n')
+          .trim()
+        break
+      }
+    }
+
+    // Extract location
+    let location = ''
+    const locMatch = dataStr.match(/"city":\s*"([^"]+)"/)
+    const regionMatch = dataStr.match(/"state":\s*"([^"]+)"/)
+    if (locMatch) location = [locMatch[1], regionMatch?.[1]].filter(Boolean).join(', ')
+
+    // Extract rating
+    let rating = 0
+    const ratingMatch = dataStr.match(/"ratingValue":\s*([\d.]+)/)
+      ?? dataStr.match(/"guestSatisfactionOverall":\s*([\d.]+)/)
+    if (ratingMatch) rating = parseFloat(ratingMatch[1])
+
+    // Extract review count
+    let reviewCount = 0
+    const rcMatch = dataStr.match(/"reviewCount":\s*(\d+)/)
+      ?? dataStr.match(/"reviewsCount":\s*(\d+)/)
+      ?? dataStr.match(/"visibleReviewCount":\s*(\d+)/)
+    if (rcMatch) reviewCount = parseInt(rcMatch[1])
+
+    // Extract amenities
+    let amenities: string[] = []
+    const amenityMatches = dataStr.match(/"title":\s*"([^"]{2,50})"/g)
+    if (amenityMatches) {
+      const found = amenityMatches
+        .map(m => m.match(/"title":\s*"([^"]+)"/)?.[1] ?? '')
+        .filter(a => a && !a.includes('\\') && a.length > 1 && a.length < 50)
+      amenities = Array.from(new Set(found)).slice(0, 50)
+    }
+
+    // Extract reviews
+    let reviews: string[] = []
+    const reviewMatches = dataStr.match(/"comments":\s*"([^"]{15,250})"/g)
+    if (reviewMatches) {
+      reviews = reviewMatches
+        .map(m => m.match(/"comments":\s*"([^"]+)"/)?.[1] ?? '')
+        .filter(r => r.length > 15)
+        .slice(0, 12)
+    }
+
+    // Extract photo count
+    let photoCount = 0
+    const photoMatches = dataStr.match(/"baseUrl":\s*"https:\/\/a0\.muscache\.com[^"]+"/g)
+    if (photoMatches) photoCount = photoMatches.length
+
+    if (!title && !description) {
+      return { ...base, scrapeError: 'API returned no listing data' }
+    }
+
+    console.log(`[scraper:api] Success — title: ${title}, rating: ${rating}, reviews: ${reviewCount}`)
+
+    return {
+      ...base,
+      title,
+      location,
+      description,
+      photoCount,
+      rating,
+      reviewCount,
+      amenities,
+      reviews,
+      scrapeSuccess: true,
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[scraper:api] Failed:', msg)
+    return { ...base, scrapeError: msg }
+  }
+}
+
+/**
+ * HTML fetch-based scraper — extracts from meta tags and embedded JSON.
+ * Fallback if API scrape fails.
  */
 async function fetchScrape(url: string): Promise<ScrapedListing> {
   const base: ScrapedListing = {
@@ -40,6 +175,7 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
   }
 
   const html = await res.text()
+  console.log(`[scraper:fetch] Got ${html.length} bytes`)
 
   // --- Extract from meta tags ---
   const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
@@ -50,16 +186,13 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
     ?? html.match(/<meta\s+name="description"\s+content="([^"]+)"/i)
   const metaDescription = descMatch?.[1]?.trim() ?? ''
 
-  // --- Extract from JSON-LD structured data ---
+  // --- Extract from JSON-LD ---
   let jsonLdData: Record<string, unknown> = {}
   const jsonLdMatch = html.match(/<script\s+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i)
   if (jsonLdMatch) {
-    try {
-      jsonLdData = JSON.parse(jsonLdMatch[1])
-    } catch { /* ignore parse errors */ }
+    try { jsonLdData = JSON.parse(jsonLdMatch[1]) } catch {}
   }
 
-  // --- Extract from Airbnb's embedded data (deferred state) ---
   let description = ''
   let amenities: string[] = []
   let rating = 0
@@ -68,10 +201,8 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
   let photoCount = 0
   let location = ''
 
-  // Try to find Airbnb's bootstrapped data in script tags
-  const dataScripts = html.match(/<script[^>]*id="data-deferred-state[^"]*"[^>]*>([\s\S]*?)<\/script>/gi)
-    ?? html.match(/<script\s+type="application\/json"[^>]*data-state[^>]*>([\s\S]*?)<\/script>/gi)
-    ?? []
+  // Try deferred state script tags
+  const dataScripts = html.match(/<script[^>]*id="data-deferred-state[^"]*"[^>]*>([\s\S]*?)<\/script>/gi) ?? []
 
   for (const scriptTag of dataScripts) {
     const jsonMatch = scriptTag.match(/>([\s\S]*?)<\/script>/i)
@@ -80,85 +211,53 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
       const data = JSON.parse(jsonMatch[1])
       const dataStr = JSON.stringify(data)
 
-      // Extract description from nested data
       if (!description) {
         const descPatterns = [
           /"htmlDescription":\s*\{[^}]*"htmlText":\s*"([^"]+)"/,
           /"description":\s*"([^"]{50,})"/,
-          /"sectioned_description"[\s\S]*?"body":\s*"([^"]+)"/,
         ]
         for (const pattern of descPatterns) {
           const match = dataStr.match(pattern)
           if (match) {
-            description = match[1]
-              .replace(/<br\s*\/?>/gi, '\n')
-              .replace(/<[^>]+>/g, '')
-              .replace(/\\n/g, '\n')
-              .trim()
+            description = match[1].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').replace(/\\n/g, '\n').trim()
             break
           }
         }
       }
 
-      // Extract amenities
       if (!amenities.length) {
         const amenityMatches = dataStr.match(/"title":\s*"([^"]{2,50})"/g)
         if (amenityMatches) {
-          const found = amenityMatches
-            .map(m => m.match(/"title":\s*"([^"]+)"/)?.[1] ?? '')
-            .filter(a => a && !a.includes('\\') && a.length > 1 && a.length < 50)
-          amenities = Array.from(new Set(found)).slice(0, 50)
+          amenities = Array.from(new Set(
+            amenityMatches.map(m => m.match(/"title":\s*"([^"]+)"/)?.[1] ?? '').filter(a => a && a.length > 1 && a.length < 50)
+          )).slice(0, 50)
         }
       }
 
-      // Extract rating
       if (!rating) {
-        const ratingMatch = dataStr.match(/"ratingValue":\s*([\d.]+)/)
-          ?? dataStr.match(/"guestSatisfactionOverall":\s*([\d.]+)/)
-          ?? dataStr.match(/"rating":\s*([\d.]+)/)
-        if (ratingMatch) rating = parseFloat(ratingMatch[1])
+        const rm = dataStr.match(/"ratingValue":\s*([\d.]+)/) ?? dataStr.match(/"guestSatisfactionOverall":\s*([\d.]+)/)
+        if (rm) rating = parseFloat(rm[1])
       }
 
-      // Extract review count
       if (!reviewCount) {
-        const rcMatch = dataStr.match(/"reviewCount":\s*(\d+)/)
-          ?? dataStr.match(/"reviewsCount":\s*(\d+)/)
-          ?? dataStr.match(/"visibleReviewCount":\s*(\d+)/)
-        if (rcMatch) reviewCount = parseInt(rcMatch[1])
+        const rc = dataStr.match(/"reviewCount":\s*(\d+)/) ?? dataStr.match(/"visibleReviewCount":\s*(\d+)/)
+        if (rc) reviewCount = parseInt(rc[1])
       }
 
-      // Extract reviews
       if (!reviews.length) {
-        const reviewMatches = dataStr.match(/"comments":\s*"([^"]{15,250})"/g)
-          ?? dataStr.match(/"reviewText":\s*"([^"]{15,250})"/g)
-        if (reviewMatches) {
-          reviews = reviewMatches
-            .map(m => {
-              const match = m.match(/"(?:comments|reviewText)":\s*"([^"]+)"/)
-              return match?.[1] ?? ''
-            })
-            .filter(r => r.length > 15)
-            .slice(0, 12)
-        }
+        const rm = dataStr.match(/"comments":\s*"([^"]{15,250})"/g)
+        if (rm) reviews = rm.map(m => m.match(/"comments":\s*"([^"]+)"/)?.[1] ?? '').filter(r => r.length > 15).slice(0, 12)
       }
 
-      // Extract photo count
       if (!photoCount) {
-        const photoMatches = dataStr.match(/"baseUrl":\s*"https:\/\/a0\.muscache\.com[^"]+"/g)
-          ?? dataStr.match(/"picture":\s*"[^"]+"/g)
-        if (photoMatches) photoCount = photoMatches.length
+        const pm = dataStr.match(/"baseUrl":\s*"https:\/\/a0\.muscache\.com[^"]+"/g)
+        if (pm) photoCount = pm.length
       }
-
-    } catch { /* ignore parse errors for individual script blocks */ }
+    } catch {}
   }
 
-  // Use JSON-LD data as fallback
-  if (!title && jsonLdData.name) {
-    // title already set above from meta
-  }
-  if (!description && typeof jsonLdData.description === 'string') {
-    description = jsonLdData.description
-  }
+  // JSON-LD fallbacks
+  if (!description && typeof jsonLdData.description === 'string') description = jsonLdData.description
   if (!rating && typeof jsonLdData.aggregateRating === 'object' && jsonLdData.aggregateRating) {
     const ar = jsonLdData.aggregateRating as Record<string, unknown>
     if (ar.ratingValue) rating = parseFloat(String(ar.ratingValue))
@@ -168,13 +267,7 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
     const addr = jsonLdData.address as Record<string, string>
     location = [addr.addressLocality, addr.addressRegion, addr.addressCountry].filter(Boolean).join(', ')
   }
-
-  // Fallback: use meta description if no full description found
-  if (!description && metaDescription) {
-    description = metaDescription
-  }
-
-  // Count photos from HTML if not found in JSON
+  if (!description && metaDescription) description = metaDescription
   if (!photoCount) {
     const imgMatches = html.match(/a0\.muscache\.com/g)
     photoCount = imgMatches ? Math.min(imgMatches.length, 50) : 0
@@ -184,18 +277,7 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
     return { ...base, scrapeError: 'Could not extract listing data from page' }
   }
 
-  return {
-    ...base,
-    title,
-    location,
-    description,
-    photoCount,
-    rating,
-    reviewCount,
-    amenities,
-    reviews,
-    scrapeSuccess: true,
-  }
+  return { ...base, title, location, description, photoCount, rating, reviewCount, amenities, reviews, scrapeSuccess: true }
 }
 
 /**
@@ -365,15 +447,23 @@ async function playwrightScrape(url: string): Promise<ScrapedListing> {
 
 /**
  * Main scraper entry point.
- * Tries fetch-based scraping first (works on Vercel),
- * falls back to Playwright locally if fetch fails.
+ * 1. API-based (most reliable on Vercel)
+ * 2. HTML fetch fallback
+ * 3. Playwright fallback (local dev only)
  */
 export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> {
-  // Try fetch-based scraping first (works everywhere)
+  // Try API-based scraping first (works on Vercel)
+  console.log('[scraper] Trying API-based scrape...')
+  const apiResult = await apiScrape(url)
+  if (apiResult.scrapeSuccess) {
+    return apiResult
+  }
+  console.warn('[scraper] API scrape failed:', apiResult.scrapeError)
+
+  // Try HTML fetch fallback
   console.log('[scraper] Trying fetch-based scrape...')
   const fetchResult = await fetchScrape(url)
   if (fetchResult.scrapeSuccess) {
-    console.log('[scraper] Fetch scrape succeeded:', fetchResult.title)
     return fetchResult
   }
   console.warn('[scraper] Fetch scrape failed:', fetchResult.scrapeError)
@@ -382,7 +472,6 @@ export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> 
   console.log('[scraper] Trying Playwright fallback...')
   const pwResult = await playwrightScrape(url)
   if (pwResult.scrapeSuccess) {
-    console.log('[scraper] Playwright scrape succeeded:', pwResult.title)
     return pwResult
   }
   console.warn('[scraper] Playwright fallback failed:', pwResult.scrapeError)
