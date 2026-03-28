@@ -1,0 +1,356 @@
+import Anthropic from '@anthropic-ai/sdk'
+import { NextRequest, NextResponse } from 'next/server'
+import { ListingInput } from '@/app/lib/types'
+import { scrapeAirbnbListing, isValidAirbnbUrl } from '@/app/lib/scraper'
+import { saveReport } from '@/app/lib/supabase'
+import { verifyPayment } from '@/app/lib/verify-payment'
+
+const USE_MOCK = process.env.USE_MOCK_API === 'true'
+
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const MOCK_REPORT = {
+  overallScore: 72,
+  estimatedImprovement: 'Good — meaningful gains from the changes below',
+  summary: 'A strong NEC/CBS niche listing with a killer unique selling point (hot tub) but held back by a thin description and missed business-traveller amenities.',
+  priorityActions: [
+    'Rewrite your description — it reads like a feature list. Paint the guest experience: arriving after a long NEC day, sinking into the hot tub, cooking dinner in the kitchen. Use the full rewrite below.',
+    'Add a dedicated workspace mention — you target business travellers and contractors but don\'t mention desk space, fast Wi-Fi speed, or charging points.',
+    'Add self check-in with a key safe or smart lock — contractors and event visitors often arrive at odd hours and this is expected for entire-home listings.',
+    'Add a "What\'s Nearby" section with your exact drive times to NEC, CBS Arena, Birmingham Airport, and local pubs/restaurants.',
+    'Weave both guest personas into your description naturally — mention what business guests care about (Wi-Fi speed, desk, parking, NEC distance) alongside what couples want (hot tub, local restaurants, Warwick Castle) so each type sees themselves.',
+  ],
+  titleScore: 71,
+  titleProblems: [
+    'Title front-loads "Hot Tub House" which is great, but the pipe and bullet separators (| •) look cluttered on mobile and get cut off in search results',
+    '"Events" is too vague — guests searching don\'t type "events", they type "NEC exhibition" or "CBS Arena concert"',
+    'Adding "Entire House" to the title helps guests instantly see it matches their search — it improves click-through when they\'re filtering by property type',
+  ],
+  titleSuggestions: [
+    'Hot Tub House · NEC & CBS Arena · Parking',
+    'Private Hot Tub · Near NEC · Sleeps 5',
+    'NEC Hot Tub House · 3 Free Parking',
+  ],
+  descriptionScore: 52,
+  descriptionProblems: [
+    'Description reads like a bullet-point feature list rather than painting a picture of the guest experience — it doesn\'t sell the feeling of staying here',
+    'No mention of specific distances or drive times to NEC, CBS Arena, or Birmingham Airport — these are the main reasons guests book',
+    'Rooms described as "small" — this plants doubt. Reframe as "cosy" or just describe what\'s in them without the size qualifier',
+  ],
+  descriptionRewrite:
+    'Your own private house with a hot tub — the perfect home base near the NEC.\n\nAfter a long day at the NEC Exhibition Centre or CBS Arena, unwind in your private hot tub before settling in for the evening. This is a whole house to yourself in Warwickshire — just [X min] from the NEC and [X min] from Birmingham Airport.\n\nThe house sleeps 5 across two cosy double bedrooms and a single room — ideal for a couple\'s getaway, a solo business trip, or a small contractor team. The fully equipped kitchen means you can cook dinner instead of hunting for restaurants after a tiring day, and the lounge is a proper space to relax with the TV.\n\nParking is never a problem — the driveway fits 3 cars, so you and your colleagues can all drive separately. The M6 motorway is [X min] away, making Coventry, Leamington Spa, and Warwick all within easy reach.\n\nWhether you\'re here for a trade show, a concert at the CBS Arena, or simply want a relaxing break in the Warwickshire countryside, this house gives you space, privacy, and comfort.\n\nWe\'d love to host you — check out our reviews and get in touch if you have any questions!',
+  photoScore: 38,
+  photoCount: 8,
+  missingPhotos: [
+    'Hero shot of key selling point (e.g. hot tub, garden) with evening lighting for atmosphere',
+    'Individual bedroom photos with clean bedding and natural light',
+    'Kitchen detail shot showing equipment and worktop space',
+    'Outdoor area or garden — guests look for usable outdoor space',
+    'Parking area or street view — business travellers want to confirm parking before booking',
+  ],
+  amenityScore: 62,
+  topAmenities: ['Private hot tub', 'Free parking (3 cars)', 'Full kitchen'],
+  amenityGaps: ['Self check-in / key safe or smart lock', 'Dedicated workspace or desk for contractors', 'Wi-Fi speed listed in Mbps (business travellers check this)'],
+  personaScore: 68,
+  primaryPersona: 'Event visitors attending NEC exhibitions and CBS Arena shows',
+  personaProblems: [
+    'Listing mentions contractors but doesn\'t highlight contractor-friendly amenities — washing machine, early check-in flexibility, or weekly discounts for longer stays',
+    'Couples are mentioned but the listing doesn\'t lean into the romantic hot tub angle — no mention of local restaurants, pubs, or date-night spots nearby',
+  ],
+  personaSuggestion: 'Weave both personas into your description naturally: mention what business guests need (Wi-Fi speed, workspace, parking, NEC distance) alongside what couples want (hot tub, local restaurants, Warwick Castle). One flowing narrative that speaks to multiple audiences works better than rigidly labelled sections.',
+  competitorInsight: 'Top-performing listings near event venues typically include exact drive times in their first description line and offer self check-in as standard. A private hot tub is a strong differentiator — to maximise it, consider mentioning specific events by name (e.g. "Great base for Crufts, Spring Fair, or Motorcycle Live") as guests searching for these events may find your listing more relevant.',
+  reviewScore: 92,
+  guestLoves: ['Hot tub experience', 'Proximity to NEC/CBS Arena', 'Clean and well-maintained'],
+  reviewRisks: [
+    'Based on available reviews: maintaining a high rating is critical for search ranking — consider a printed guest guide to pre-empt common questions and protect your score.',
+    'Ensure the listing clearly explains room sizes and capacity upfront to avoid expectation mismatch in future reviews.',
+  ],
+  seoKeywords: ['NEC Airbnb with hot tub', 'hot tub house near NEC Birmingham', 'CBS Arena accommodation', 'Warwickshire hot tub rental', 'NEC exhibition accommodation', 'Birmingham Airport Airbnb', 'contractor accommodation near NEC'],
+  conversionTips: [
+    'Add your best 5-star review quote to the very first line of your description — social proof in the opening line builds instant trust',
+    'Offer a 10-15% weekly discount to capture contractor stays of 5+ days — this market is price-sensitive but books longer',
+    'Mention specific NEC events in your description (Crufts, Spring Fair, Motorcycle Live) — guests attending these events may find your listing more relevant when browsing',
+    'Add exact drive times to key venues: NEC, CBS Arena, Birmingham Airport, nearest motorway junction — guests want to plan their journey before booking',
+    'Lead your description with your strongest differentiator (the hot tub) — it\'s what sets you apart and should hook guests in the first line',
+  ],
+  wasScraped: false,
+}
+
+const SYSTEM = `You are an expert Airbnb listing optimization analyst with deep knowledge of conversion psychology and booking behavior. Analyze the listing data provided and return ONLY a valid JSON object. No markdown, no backticks, no explanation — raw JSON only.
+
+ACCURACY RULES — these are critical:
+
+SCORING ANCHOR — account for proven performance:
+- If the listing has a rating of 4.8+ AND 100+ reviews, it is a proven high-performer. The overallScore MUST be at least 80 unless there are severe copy issues (e.g., nearly empty description, critical misinformation). A 5.0-rated Superhost with 100+ reviews should never score below 80.
+- If the listing has a rating of 4.5+ AND 50+ reviews, floor the overallScore at 70.
+- High review counts and ratings reflect real guest satisfaction — the score should acknowledge that. Deduct points only for genuine, actionable copy improvements, not hypothetical ones.
+- The reviewScore for a 5.0-rated listing with 100+ reviews must be 95+. Do not penalize listings for "limited review data" when 100+ reviews exist.
+
+VERIFY BEFORE RECOMMENDING — do NOT recommend what already exists:
+- Before suggesting any amenity addition (e.g., "add self check-in", "add dedicated workspace"), CHECK the provided amenities list. If the amenity is already listed, do NOT recommend adding it. Instead, suggest mentioning it more prominently in the description if it's under-highlighted.
+- Before suggesting a new description section (e.g., "add a What's Nearby section"), CHECK if the description already contains that information. If it does, do NOT recommend creating it. Instead suggest improving or expanding the existing content if warranted.
+- Before recommending any feature, cross-reference it against BOTH the amenities list AND the full description text. False recommendations (suggesting features the listing already has) are the most damaging type of error.
+- TITLE SUGGESTIONS must reflect the actual property data. Guest capacity in titles MUST match the bed count from the description/amenities. Do not guess or round up capacity.
+
+- TITLE SUGGESTIONS must each be UNDER 50 characters. Airbnb truncates titles on mobile search cards at ~50 chars. Count carefully before submitting.
+- DESCRIPTION REWRITE must calculate guest capacity correctly: a double/queen/king bed sleeps 2, a single/twin bed sleeps 1, a sofa bed sleeps 1-2. Add them up accurately.
+- DESCRIPTION REWRITE must NOT assume facts about the property that aren't in the provided data (e.g., don't say "hot tub under the stars" unless you know it's outdoors and uncovered). If you don't know a detail, omit it or use a placeholder like [your hot tub].
+- DESCRIPTION REWRITE must NOT disparage hotels or competitors. Position the listing on its own strengths.
+- DESCRIPTION REWRITE must use bracket placeholders like [X min] for any distances or drive times you don't have exact data for. NEVER invent specific numbers you aren't sure of.
+- DESCRIPTION REWRITE must end with a warm, conversational closing — avoid pushy sales phrases like "Book now!", "You won't regret it!", or "You won't want to go back!".
+- DESCRIPTION REWRITE: if you recommend adding drive times or distances in the problems section, include them (or bracket placeholders) in the rewrite. Follow your own advice.
+- TITLE PROBLEMS: Do NOT claim that Airbnb's search algorithm ranks listings based on keywords in the title text. Airbnb uses structured metadata (property type settings) for filtering, not title text parsing. Title wording helps guest perception and click-through, not search algorithm ranking.
+- PERSONA SUGGESTION: Suggest weaving multiple guest personas naturally into the description narrative, NOT creating rigidly labeled sections. Guests scan quickly — one flowing narrative that speaks to multiple audiences works better than labeled blocks.
+- KEYWORDS: These should be framed as "search phrases guests in your target market use" — useful for understanding your audience and naturally incorporating relevant language. Do NOT imply that keyword density in descriptions directly affects Airbnb search ranking. Airbnb's algorithm primarily ranks by response rate, booking rate, reviews, pricing, and listing completeness.
+
+Required schema (use realistic scores, not perfect ones):
+{
+  "overallScore": <integer 0-100 — weighted average of title, description, amenity, persona, and review scores. Do NOT factor in photoScore since you haven't seen the actual photos>,
+  "estimatedImprovement": "<string>" — this is overridden server-side so just return any placeholder,
+  "summary": "<one punchy sentence verdict>",
+  "priorityActions": ["<#1 highest-impact action to take first>", "<#2 next priority>", "<#3>", "<#4>", "<#5>"] — base these ONLY on the text data you can actually see (title, description, amenities, reviews). Do NOT include photo-specific actions like 'add more photos' since you haven't seen them,
+  "titleScore": <integer 0-100>,
+  "titleProblems": ["<specific problem>", "<specific problem>", "<specific problem>"],
+  "titleSuggestions": ["<Title Option 1 — MUST be under 50 characters>", "<Title Option 2 — under 50 chars>", "<Title Option 3 — under 50 chars>"],
+  "descriptionScore": <integer 0-100>,
+  "descriptionProblems": ["<specific problem>", "<specific problem>", "<specific problem>"],
+  "descriptionRewrite": "<Full rewritten description (4-6 paragraphs). Include an emotional opening hook, highlight unique selling points, paint the guest experience, mention the neighbourhood/local tips, and end with a warm conversational close. Write it so the host can copy-paste it directly. Calculate capacity correctly. Use [bracket placeholders] for facts you're unsure of.>",
+  "photoScore": <integer 0-100 — score based on photo count only: 0-9 photos is poor (30-50), 10-14 is fair (50-65), 15-19 is good (65-80), 20+ is great (80-95)>,
+  "photoCount": <integer — echo back the photo count from the input>,
+  "missingPhotos": ["<recommended photo type that top listings in this market typically include>", ... 5 items — these are GENERAL RECOMMENDATIONS based on the property type and location, NOT claims about what the host's actual photos show. Frame as 'photos that top-performing listings in this market include'>"],
+  "amenityScore": <integer 0-100 — based on the listed amenities vs what top listings in this market typically offer>,
+  "topAmenities": ["<amenity>", "<amenity>", "<amenity>"] — pick the 3 strongest from the provided amenity list,
+  "amenityGaps": ["<missing amenity>", "<missing amenity>", "<missing amenity>"] — amenities common in top listings for this market that are absent from the provided list,
+  "personaScore": <integer 0-100 — how well the listing text targets its likely guest persona. Based on title, description, and amenities alignment>,
+  "primaryPersona": "<most likely guest type based on listing text, location, and amenities>",
+  "personaProblems": ["<gap in how the listing text appeals to this persona>", "<gap>"],
+  "personaSuggestion": "<short actionable suggestion to better target this persona in the listing text — suggest weaving personas into a natural narrative, not rigid sections>",
+  "competitorInsight": "<2-3 sentences about general best practices from top-performing Airbnb listings in this type of market. Base this on known Airbnb optimization principles, NOT on actual competitor data you don't have. Frame as 'top-performing listings in markets like yours typically...' not as specific competitor claims>",
+  "reviewScore": <integer 0-100 — based on rating, review count, and the sample of reviews provided. If few or no reviews are available, score conservatively and note the limited data>,
+  "guestLoves": ["<thing>", "<thing>", "<thing>"] — based on the review snippets provided,
+  "reviewRisks": ["<risk>", "<risk>"] — based on review snippets and rating trends,
+  "seoKeywords": ["<kw1>", "<kw2>", "<kw3>", "<kw4>", "<kw5>", "<kw6>", "<kw7>"] — search phrases your target guests are likely using. These help you understand your audience and incorporate natural language, not game the algorithm,
+  "conversionTips": ["<tip1>", "<tip2>", "<tip3>", "<tip4>", "<tip5>"] — actionable tips based on the actual listing text and known Airbnb best practices
+}`
+
+/** Qualitative improvement potential based on score.
+ *  Lower scores = more room for improvement.
+ *  Avoids fake percentages — actual impact depends on market, pricing, season, etc. */
+function estimateImprovement(score: number): string {
+  if (score >= 90) return 'Low — your listing is already well-optimized'
+  if (score >= 80) return 'Moderate — a few targeted changes could help'
+  if (score >= 70) return 'Good — meaningful gains from the changes below'
+  if (score >= 60) return 'High — significant room for improvement'
+  if (score >= 50) return 'Very high — these changes could make a real difference'
+  return 'Substantial — your listing has major opportunities'
+}
+
+/**
+ * Post-processing validation: catches AI errors before sending to client.
+ * - Strips title suggestions that exceed 50 chars
+ * - Fixes guest capacity mismatches in title suggestions
+ * - Removes amenity-gap recommendations for amenities already present
+ * - Enforces scoring floor for high-performing listings
+ */
+function validateReport(report: Record<string, unknown>, listing: ListingInput) {
+  const amenitiesLower = (listing.amenities ?? []).map(a => a.toLowerCase()).join(' ')
+  const descLower = (listing.description ?? '').toLowerCase()
+  const allListingText = `${amenitiesLower} ${descLower}`
+
+  // --- Title suggestion validation ---
+  if (Array.isArray(report.titleSuggestions)) {
+    // Calculate actual guest capacity from description
+    const capacityMatch = descLower.match(/sleeps?\s+(\d+)/i) ??
+      descLower.match(/accommodates?\s+(\d+)/i) ??
+      descLower.match(/up\s+to\s+(\d+)\s+guest/i)
+    const actualCapacity = capacityMatch ? parseInt(capacityMatch[1]) : 0
+
+    report.titleSuggestions = (report.titleSuggestions as string[])
+      .filter(t => t.length <= 50) // Enforce char limit
+      .map(t => {
+        if (!actualCapacity) return t
+        // Fix wrong "Sleeps X" in title suggestions
+        const sleepsMatch = t.match(/sleeps?\s+(\d+)/i)
+        if (sleepsMatch && parseInt(sleepsMatch[1]) !== actualCapacity) {
+          return t.replace(/sleeps?\s+\d+/i, `Sleeps ${actualCapacity}`)
+        }
+        return t
+      })
+  }
+
+  // --- Amenity gap validation: remove recommendations for things already present ---
+  if (Array.isArray(report.amenityGaps)) {
+    const knownAmenityKeywords: Record<string, string[]> = {
+      'self check-in': ['self check-in', 'self checkin', 'lockbox', 'lock box', 'keypad', 'smart lock', 'key safe'],
+      'dedicated workspace': ['dedicated workspace', 'workspace', 'desk', 'work desk', 'office'],
+      'wifi': ['wifi', 'wi-fi', 'wireless'],
+      'parking': ['parking', 'driveway', 'garage'],
+      'hot tub': ['hot tub', 'jacuzzi', 'spa'],
+      'washer': ['washer', 'washing machine', 'laundry'],
+      'dryer': ['dryer', 'tumble dry'],
+      'kitchen': ['kitchen', 'full kitchen', 'equipped kitchen'],
+      'pool': ['pool', 'swimming pool'],
+      'ev charger': ['ev charger', 'electric vehicle', 'charging station'],
+    }
+
+    report.amenityGaps = (report.amenityGaps as string[]).filter(gap => {
+      const gapLower = gap.toLowerCase()
+      // Check if any known keyword group matches both the gap and the existing listing text
+      for (const [, keywords] of Object.entries(knownAmenityKeywords)) {
+        const gapMatchesGroup = keywords.some(kw => gapLower.includes(kw))
+        if (gapMatchesGroup) {
+          const listingHasIt = keywords.some(kw => allListingText.includes(kw))
+          if (listingHasIt) {
+            console.log(`[validate] Filtered out amenity gap "${gap}" — already present in listing`)
+            return false
+          }
+        }
+      }
+      return true
+    })
+  }
+
+  // --- Priority action validation: filter out actions for things that already exist ---
+  if (Array.isArray(report.priorityActions)) {
+    report.priorityActions = (report.priorityActions as string[]).filter(action => {
+      const actionLower = action.toLowerCase()
+      // Filter out "add self check-in" if listing already has it
+      if (actionLower.includes('self check-in') || actionLower.includes('self checkin') || actionLower.includes('key safe') || actionLower.includes('smart lock')) {
+        if (allListingText.includes('self check-in') || allListingText.includes('lockbox') || allListingText.includes('lock box') || allListingText.includes('keypad') || allListingText.includes('smart lock') || allListingText.includes('key safe')) {
+          console.log(`[validate] Filtered out priority action — self check-in already exists`)
+          return false
+        }
+      }
+      return true
+    })
+  }
+
+  // --- Scoring floor enforcement for proven high-performers ---
+  const rating = listing.rating ?? 0
+  const reviewCount = listing.reviewCount ?? 0
+  const currentScore = report.overallScore as number
+
+  if (rating >= 4.8 && reviewCount >= 100 && currentScore < 80) {
+    console.log(`[validate] Boosted overallScore from ${currentScore} to 80 (rating=${rating}, reviews=${reviewCount})`)
+    report.overallScore = Math.max(currentScore, 80)
+  } else if (rating >= 4.5 && reviewCount >= 50 && currentScore < 70) {
+    console.log(`[validate] Boosted overallScore from ${currentScore} to 70 (rating=${rating}, reviews=${reviewCount})`)
+    report.overallScore = Math.max(currentScore, 70)
+  }
+
+  return report
+}
+
+function buildPrompt(listing: ListingInput, wasScraped: boolean): string {
+  if (listing.isDemo || (listing.title && listing.description)) {
+    return `Analyze this Airbnb listing${wasScraped ? ' (data auto-extracted from the listing page)' : ''}:
+
+Title: ${listing.title}
+Location: ${listing.location ?? 'Unknown'}
+Description: ${listing.description}
+Amenities: ${listing.amenities?.join(', ') ?? 'Not listed'}
+Photos: ${listing.photoCount ?? 0} photos on listing (count only — you have NOT seen the actual images)
+Rating: ${listing.rating ?? 'No rating'} ${listing.reviewCount ? `(${listing.reviewCount} reviews)` : ''}
+Recent guest reviews: ${listing.reviews?.join(' | ') ?? 'None'}
+
+Provide a detailed, actionable optimization report. Be specific — reference the actual title and description content. Scores should reflect real weaknesses, not be artificially high.`
+  }
+
+  // No listing data available — caller should return an error instead
+  return ''
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body: ListingInput & { userId?: string; sessionId?: string } = await req.json()
+
+    // Demo mode — always allow so the demo button works regardless of mock/live mode
+    const isDemo = body.isDemo === true
+
+    // Verify payment for non-demo, non-mock requests
+    // TODO: Re-enable payment verification before going live
+    // if (!USE_MOCK) {
+    //   const payment = await verifyPayment(body.sessionId)
+    //   if (!payment.valid) {
+    //     return NextResponse.json({ error: payment.error || 'Payment required' }, { status: 403 })
+    //   }
+    // }
+
+    // Return mock data for demo or when USE_MOCK_API is enabled
+    if (isDemo || USE_MOCK) {
+      console.log(`[analyze] Using mock response (${isDemo ? 'demo' : 'USE_MOCK_API=true'})`)
+      return NextResponse.json({
+        ...MOCK_REPORT,
+        estimatedImprovement: estimateImprovement(MOCK_REPORT.overallScore),
+      })
+    }
+
+    let listing: ListingInput = body
+    let wasScraped = false
+
+    // If a real Airbnb URL is provided (not demo), attempt to scrape it
+    if (!body.isDemo && body.url && isValidAirbnbUrl(body.url)) {
+      console.log('[analyze] Scraping:', body.url)
+      const scraped = await scrapeAirbnbListing(body.url)
+
+      if (scraped.scrapeSuccess && scraped.title) {
+        listing = scraped
+        wasScraped = true
+        console.log('[analyze] Scrape successful:', scraped.title)
+      } else {
+        console.warn('[analyze] Scrape failed, falling back to AI inference:', scraped.scrapeError)
+        listing = body
+      }
+    }
+
+    // Ensure we have enough data for a meaningful analysis
+    if (!listing.title && !listing.description) {
+      return NextResponse.json(
+        { error: 'Could not access your listing. Please check the URL and try again.' },
+        { status: 422 }
+      )
+    }
+
+    let report
+    try {
+      const message = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 3000,
+        temperature: 0,
+        system: SYSTEM,
+        messages: [{ role: 'user', content: buildPrompt(listing, wasScraped) }],
+      })
+
+      const raw = message.content
+        .map(b => (b.type === 'text' ? b.text : ''))
+        .join('')
+        .replace(/```json|```/g, '')
+        .trim()
+
+      report = JSON.parse(raw)
+    } catch (apiErr) {
+      console.error('[analyze] API call failed:', apiErr instanceof Error ? apiErr.message : apiErr)
+      return NextResponse.json({ error: 'Analysis failed. Please try again.' }, { status: 502 })
+    }
+
+    // Post-processing: catch and fix AI errors before sending to client
+    report = validateReport(report, listing)
+    report.estimatedImprovement = estimateImprovement(report.overallScore as number)
+
+    // Save to Supabase if user is authenticated
+    if (body.userId) {
+      await saveReport(
+        body.userId,
+        body.url ?? 'demo',
+        listing,
+        report,
+        report.overallScore as number
+      ).catch(err => console.warn('[analyze] Failed to save report:', err))
+    }
+
+    return NextResponse.json({ ...report, wasScraped })
+  } catch (err) {
+    console.error('[analyze] Error:', err)
+    return NextResponse.json({ error: 'Analysis failed. Check your API key and try again.' }, { status: 500 })
+  }
+}
