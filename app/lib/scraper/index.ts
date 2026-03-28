@@ -57,10 +57,15 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     const json = await res.json()
     const dataStr = JSON.stringify(json)
 
-    // Extract title
+    // Extract title — prefer listingTitle (host-written) over generic "title" fields
     let title = ''
-    const titleMatch = dataStr.match(/"title":\s*"([^"]{5,100})"/)
-    if (titleMatch) title = titleMatch[1]
+    const listingTitleMatch = dataStr.match(/"listingTitle":\s*"([^"]{5,200})"/)
+    if (listingTitleMatch) {
+      title = listingTitleMatch[1]
+    } else {
+      const titleMatch = dataStr.match(/"title":\s*"([^"]{5,100})"/)
+      if (titleMatch) title = titleMatch[1]
+    }
 
     // Extract description
     let description = ''
@@ -177,10 +182,21 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
   const html = await res.text()
   console.log(`[scraper:fetch] Got ${html.length} bytes`)
 
-  // --- Extract from meta tags ---
-  const titleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
-    ?? html.match(/<title>([^<]+)<\/title>/i)
-  const title = titleMatch?.[1]?.replace(/\s*[-·|].*Airbnb.*$/i, '').trim() ?? ''
+  // --- Extract title ---
+  // Prefer listingTitle from embedded data, then <title> tag (has host title), og:title last (auto-generated)
+  let title = ''
+  const listingTitleMatch = html.match(/"listingTitle":\s*"([^"]{5,200})"/)
+  if (listingTitleMatch) {
+    title = listingTitleMatch[1]
+  } else {
+    const pageTitleMatch = html.match(/<title>([^<]+)<\/title>/i)
+    if (pageTitleMatch) {
+      title = pageTitleMatch[1].replace(/\s*-\s*.*Airbnb.*$/i, '').trim()
+    } else {
+      const ogTitleMatch = html.match(/<meta\s+property="og:title"\s+content="([^"]+)"/i)
+      title = ogTitleMatch?.[1]?.replace(/\s*[-·|].*Airbnb.*$/i, '').trim() ?? ''
+    }
+  }
 
   const descMatch = html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i)
     ?? html.match(/<meta\s+name="description"\s+content="([^"]+)"/i)
@@ -210,6 +226,12 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
     try {
       const data = JSON.parse(jsonMatch[1])
       const dataStr = JSON.stringify(data)
+
+      // Extract host-written title from deferred state
+      if (!title) {
+        const lt = dataStr.match(/"listingTitle":\s*"([^"]{5,200})"/)
+        if (lt) title = lt[1]
+      }
 
       if (!description) {
         const descPatterns = [
