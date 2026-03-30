@@ -25,7 +25,7 @@ export function getStripe(): Stripe {
 // Keep backward compat — but as a getter
 export const stripe = new Proxy({} as Stripe, {
   get(_, prop) {
-    return (getStripe() as Record<string | symbol, unknown>)[prop]
+    return (getStripe() as unknown as Record<string | symbol, unknown>)[prop]
   },
 })
 
