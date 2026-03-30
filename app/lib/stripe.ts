@@ -15,7 +15,12 @@ import Stripe from 'stripe'
 let _stripe: Stripe | null = null
 export function getStripe(): Stripe {
   if (!_stripe) {
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    const key = process.env.STRIPE_SECRET_KEY
+    console.log(`[stripe] STRIPE_SECRET_KEY present: ${!!key}, length: ${key?.length ?? 0}, prefix: ${key?.slice(0, 8) ?? 'MISSING'}`)
+    if (!key || key === 'build-placeholder') {
+      throw new Error('STRIPE_SECRET_KEY is not configured at runtime')
+    }
+    _stripe = new Stripe(key, {
       apiVersion: '2024-06-20',
     })
   }
