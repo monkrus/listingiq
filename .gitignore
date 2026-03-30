@@ -5,6 +5,7 @@ out
 # secrets
 .env
 .env.local
+import.env
 .env.*.local
 .env.development.local
 .env.test.local

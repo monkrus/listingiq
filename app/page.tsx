@@ -8,8 +8,14 @@ import Report from './components/Report'
 const LOADING_STEPS = [
   'Connecting to Airbnb...',
   'Reading listing details...',
-  'Analyzing with AI...',
-  'Building your report...',
+  'Extracting photos, amenities & reviews...',
+  'Analyzing title & description...',
+  'Evaluating guest persona fit...',
+  'Checking amenity competitiveness...',
+  'Reviewing guest sentiment...',
+  'Generating SEO keywords...',
+  'Writing optimized description...',
+  'Compiling your report...',
 ]
 
 type Step = 'input' | 'plan' | 'loading' | 'report'
@@ -36,12 +42,16 @@ export default function Home() {
       if (planParam && ['quick-score', 'full-audit'].includes(planParam)) {
         setActivePlan(planParam)
       }
-      // Check for saved report first
+      // Check for saved report — only reuse if same plan (don't show Quick Score for Full Audit)
+      const savedPlan = localStorage.getItem('listingiq_plan')
       const saved = localStorage.getItem('listingiq_report')
-      if (saved) {
+      if (saved && savedPlan === planParam) {
         try { setReport(JSON.parse(saved)); return } catch {}
       }
-      // Otherwise run analysis with saved URL
+      // Clear old report if upgrading to a different plan
+      localStorage.removeItem('listingiq_report')
+      localStorage.removeItem('listingiq_plan')
+      // Run analysis with saved URL
       const savedUrl = localStorage.getItem('listingiq_url')
       if (savedUrl) {
         setUrl(savedUrl)
@@ -82,7 +92,7 @@ export default function Home() {
   async function animateSteps() {
     for (let i = 0; i < LOADING_STEPS.length; i++) {
       setStepIndex(i)
-      await new Promise(r => setTimeout(r, 900))
+      await new Promise(r => setTimeout(r, i < 3 ? 3000 : 7000))
     }
   }
 
@@ -98,7 +108,7 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, sessionId }),
+        body: JSON.stringify({ ...payload, sessionId, plan: activePlan }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Analysis failed')
@@ -106,6 +116,7 @@ export default function Home() {
       setReport(data)
       setStep('report')
       localStorage.setItem('listingiq_report', JSON.stringify(data))
+      localStorage.setItem('listingiq_plan', activePlan)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
       setStep('input')
@@ -160,6 +171,7 @@ export default function Home() {
     setActivePlan('quick-score')
     setStep('input')
     localStorage.removeItem('listingiq_report')
+    localStorage.removeItem('listingiq_plan')
     localStorage.removeItem('listingiq_url')
     localStorage.removeItem('listingiq_session_id')
   }
@@ -191,7 +203,7 @@ export default function Home() {
             ListingIQ · Airbnb Optimizer
           </div>
           <h1 style={{ fontFamily: 'var(--font-syne)' }} className="text-4xl font-bold text-stone-900 leading-snug mb-3">
-            Score your Airbnb<br />listing in 20 seconds
+            Score & optimize<br />your Airbnb listing
           </h1>
           <p className="text-stone-600 text-base leading-relaxed">
             AI-powered analysis of your title, photos, description,<br />
@@ -238,7 +250,7 @@ export default function Home() {
                 <p style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-900 mb-1">
                   Choose your report
                 </p>
-                <p className="text-xs text-stone-600 truncate">{url}</p>
+                <p className="text-xs text-stone-600">{(() => { try { const u = new URL(url); return u.origin + u.pathname } catch { return url } })()}</p>
               </div>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 {[
@@ -246,14 +258,14 @@ export default function Home() {
                     key: 'quick-score',
                     name: 'Quick Score',
                     price: '$29',
-                    features: ['Full 7-section audit', 'Title + description rewrites', 'SEO keywords & tips', 'Copy report as text'],
+                    features: ['Full 7-section audit', 'Title + description rewrites', 'SEO keywords & tips', 'PDF report download'],
                   },
                   {
                     key: 'full-audit',
                     name: 'Full Audit',
                     price: '$49',
                     popular: true,
-                    features: ['Everything in Quick Score', 'AI photo analysis (10 photos)', 'PDF report download', 'Copy report as text'],
+                    features: ['Everything in Quick Score', 'AI photo analysis (10 photos)', 'Photo reorder + retake tips', 'Gallery order suggestion'],
                   },
                 ].map(p => (
                   <button
@@ -327,6 +339,15 @@ export default function Home() {
         <p className="text-center text-xs text-stone-600 mt-6">
           Questions? <a href="https://m.me/redhiker" target="_blank" rel="noopener noreferrer" className="underline hover:text-stone-600">Message us on Facebook</a>
         </p>
+
+        <div className="text-[11px] text-stone-600 text-center mt-6 leading-relaxed max-w-md mx-auto space-y-2">
+          <p>
+            This report analyses your listing&apos;s text, title, photos, and presentation. Pricing strategy, calendar management, minimum-stay rules, and demand-based adjustments are outside this tool&apos;s scope but significantly impact performance.
+          </p>
+          <p>
+            Results are AI-generated and may not be fully accurate. Use them as guidance alongside your own judgement. ListingIQ is not affiliated with Airbnb.
+          </p>
+        </div>
       </div>
     </main>
   )

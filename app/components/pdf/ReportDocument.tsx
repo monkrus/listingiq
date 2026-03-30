@@ -44,7 +44,7 @@ const s = StyleSheet.create({
     fontSize: 9,
     color: C.brand,
     paddingTop: 64,
-    paddingBottom: 48,
+    paddingBottom: 64,
     backgroundColor: '#F7F6F3',
   },
   header: {
@@ -82,14 +82,14 @@ const s = StyleSheet.create({
   subScoreValue: { fontFamily: 'Syne', fontSize: 14, fontWeight: 700, textAlign: 'center' },
   subScoreBar: { height: 3, backgroundColor: '#f5f5f4', borderRadius: 2, width: '100%', marginTop: 4 },
   subScoreBarFill: { height: 3, borderRadius: 2 },
-  priorityBox: { backgroundColor: C.amberBg, border: `1pt solid ${C.amberBorder}`, borderRadius: 10, padding: 14, marginBottom: 10 },
+  priorityBox: { backgroundColor: C.amberBg, border: `1pt solid ${C.amberBorder}`, borderRadius: 10, padding: 14, marginBottom: 10, minPresenceAhead: 40 },
   priorityTitle: { fontFamily: 'Syne', fontSize: 8, fontWeight: 700, color: C.amberText, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
   priorityRow: { flexDirection: 'row', gap: 8, paddingVertical: 5, borderBottom: `1pt solid ${C.amberBorder}` },
   priorityRowLast: { flexDirection: 'row', gap: 8, paddingVertical: 5 },
   priorityNum: { fontFamily: 'Syne', fontSize: 9, fontWeight: 700, color: C.amberAccent, width: 20, flexShrink: 0 },
   priorityText: { fontSize: 9, color: C.amberText, flex: 1, lineHeight: 1.4 },
-  sectionCard: { backgroundColor: C.white, border: `1pt solid ${C.border}`, borderRadius: 10, marginBottom: 8, overflow: 'hidden' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottom: '1pt solid #f5f5f4' },
+  sectionCard: { backgroundColor: C.white, border: `1pt solid ${C.border}`, borderRadius: 10, marginBottom: 8, overflow: 'hidden', minPresenceAhead: 60 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottom: '1pt solid #f5f5f4', minPresenceAhead: 80 },
   sectionTitle: { fontFamily: 'Syne', fontSize: 10, fontWeight: 700, color: C.brand },
   scorePill: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
   scorePillText: { fontSize: 7, fontWeight: 500 },
@@ -109,13 +109,12 @@ const s = StyleSheet.create({
   rowItemText: { fontSize: 8, color: C.brand, flex: 1, lineHeight: 1.4 },
   subLabel: { fontSize: 7, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 5, marginTop: 8 },
   boldText: { fontWeight: 700 },
-  competitorBox: { backgroundColor: C.blueBg, border: '1pt solid #bfdbfe', borderRadius: 10, padding: 14, marginBottom: 8 },
+  competitorBox: { backgroundColor: C.blueBg, border: '1pt solid #bfdbfe', borderRadius: 10, padding: 14, marginBottom: 8, minPresenceAhead: 40 },
   competitorTitle: { fontFamily: 'Syne', fontSize: 8, fontWeight: 700, color: C.blueText, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
   competitorText: { fontSize: 9, color: C.blueText, lineHeight: 1.5 },
   footer: { position: 'absolute', bottom: 12, left: 40, right: 40 },
   footerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   footerText: { fontSize: 7, color: C.muted },
-  footerDisclaimer: { fontSize: 6, color: C.muted, textAlign: 'center', marginTop: 3 },
 })
 
 function SectionCard({ title, score, children }: { title: string; score: number; children: React.ReactNode }) {
@@ -163,13 +162,13 @@ function RowItems({ items, dotColor }: { items: string[]; dotColor: string }) {
   )
 }
 
-export function ReportDocument({ data: d, photoResults, photoPreviews }: { data: ReportData; photoResults?: PhotoAnalysisResult | null; photoPreviews?: string[] }) {
+export function ReportDocument({ data: d, photoResults, photoPreviews, listingUrl }: { data: ReportData; photoResults?: PhotoAnalysisResult | null; photoPreviews?: string[]; listingUrl?: string }) {
   const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   const subScores = photoResults
     ? [
         { label: 'Title', v: d.titleScore },
         { label: 'Description', v: d.descriptionScore },
-        { label: 'Photos', v: d.photoScore },
+        { label: 'Photos', v: photoResults.overallPhotoScore },
         { label: 'Amenities', v: d.amenityScore },
         { label: 'Persona', v: d.personaScore },
         { label: 'Reviews', v: d.reviewScore },
@@ -191,6 +190,11 @@ export function ReportDocument({ data: d, photoResults, photoPreviews }: { data:
         </View>
 
         <View style={s.content}>
+          {/* Listing URL */}
+          {listingUrl && (
+            <Text style={{ fontSize: 7, color: C.muted, textAlign: 'center', marginBottom: 8 }}>{listingUrl}</Text>
+          )}
+
           {/* Score hero */}
           <View style={s.heroCard}>
             <View style={s.scoreCircle}>
@@ -308,6 +312,14 @@ export function ReportDocument({ data: d, photoResults, photoPreviews }: { data:
                     )}
                   </View>
                 ))}
+                {photoResults.suggestedOrder && photoResults.suggestedOrder.length > 0 && (
+                  <>
+                    <Text style={s.subLabel}>Recommended gallery order</Text>
+                    <Text style={[s.rowItemText, { marginBottom: 6 }]}>
+                      Reorder your photos: {photoResults.suggestedOrder.map((idx, pos) => `${pos + 1}. Photo ${idx + 1}`).join('  ·  ')}
+                    </Text>
+                  </>
+                )}
                 {photoResults.missingShots.length > 0 && (
                   <>
                     <Text style={s.subLabel}>Missing high-conversion shots</Text>
@@ -343,7 +355,7 @@ export function ReportDocument({ data: d, photoResults, photoPreviews }: { data:
 
           {/* Competitor insight */}
           {d.competitorInsight && (
-            <View style={s.competitorBox} minPresenceAhead={40}>
+            <View style={s.competitorBox} wrap={false}>
               <Text style={s.competitorTitle}>Best practices from top-performing listings</Text>
               <Text style={s.competitorText}>{d.competitorInsight}</Text>
             </View>
@@ -377,10 +389,9 @@ export function ReportDocument({ data: d, photoResults, photoPreviews }: { data:
 
         <View style={s.footer} fixed>
           <View style={s.footerRow}>
-            <Text style={s.footerText}>Generated by ListingIQ · listingiq.com</Text>
+            <Text style={s.footerText}>Generated by ListingIQ · AI-generated guidance, not affiliated with Airbnb.</Text>
             <Text style={s.footerText} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
           </View>
-          <Text style={s.footerDisclaimer}>This report analyses your listing&apos;s text, title, photos, and presentation. Pricing, calendar, and demand-based adjustments are outside scope.</Text>
         </View>
       </Page>
     </Document>

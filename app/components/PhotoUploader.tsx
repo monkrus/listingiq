@@ -96,7 +96,17 @@ interface ListingContext {
   missingPhotos?: string[]
 }
 
-type Step = 'upload' | 'results'
+type Step = 'upload' | 'analyzing' | 'results'
+
+const PHOTO_LOADING_STEPS = [
+  'Uploading photos...',
+  'Examining lighting & composition...',
+  'Scoring each photo...',
+  'Identifying hero shots...',
+  'Checking for missing shots...',
+  'Writing retake instructions...',
+  'Compiling photo report...',
+]
 
 export default function PhotoUploader({ listingContext, onResults, onPreviews }: { listingContext?: ListingContext; onResults?: (r: PhotoAnalysisResult | null) => void; onPreviews?: (p: string[]) => void } = {}) {
   const [previews, setPreviews] = useState<string[]>([])
@@ -106,20 +116,28 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews }:
   const [result, setResult] = useState<PhotoAnalysisResult | null>(null)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [loadingStepIndex, setLoadingStepIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
   const MAX_PHOTOS = 10
 
+  const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4 MB per photo
+
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles)
     const rejected = arr.filter(f => !ALLOWED_TYPES.includes(f.type))
-    const valid = arr.filter(f => ALLOWED_TYPES.includes(f.type))
+    const tooLarge = arr.filter(f => ALLOWED_TYPES.includes(f.type) && f.size > MAX_FILE_SIZE)
+    const valid = arr.filter(f => ALLOWED_TYPES.includes(f.type) && f.size <= MAX_FILE_SIZE)
 
     const messages: string[] = []
 
     if (rejected.length > 0) {
       messages.push(`${rejected.length} file${rejected.length > 1 ? 's' : ''} skipped — only JPG, PNG, and WebP are accepted.`)
+    }
+
+    if (tooLarge.length > 0) {
+      messages.push(`${tooLarge.length} file${tooLarge.length > 1 ? 's' : ''} too large (max 4 MB each): ${tooLarge.map(f => f.name).join(', ')}.`)
     }
 
     if (!valid.length) {
@@ -184,20 +202,23 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews }:
     onPreviews?.(DEMO_PHOTO_PREVIEWS)
   }
 
+  async function animatePhotoSteps() {
+    for (let i = 0; i < PHOTO_LOADING_STEPS.length; i++) {
+      setLoadingStepIndex(i)
+      await new Promise(r => setTimeout(r, i < 2 ? 3000 : 5000))
+    }
+  }
+
   async function analyze() {
     if (!files.length) return
-
-    const sessionId = localStorage.getItem('listingiq_session_id')
-    const isMock = process.env.NEXT_PUBLIC_USE_MOCK_API === 'true'
-    if (!sessionId && !isMock) {
-      setError('Photo analysis requires a Full Audit plan. Purchase one from the home page to unlock this feature.')
-      return
-    }
 
     setLoading(true)
     setError('')
     setResult(null)
+    setStep('analyzing')
+    animatePhotoSteps()
 
+    const sessionId = localStorage.getItem('listingiq_session_id')
     const form = new FormData()
     files.forEach(f => form.append('photos', f))
     if (listingContext) {
@@ -217,8 +238,10 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews }:
       onPreviews?.(previews)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Analysis failed')
+      setStep('upload')
     } finally {
       setLoading(false)
+      setLoadingStepIndex(-1)
     }
   }
 
@@ -328,7 +351,24 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews }:
         </>
       )}
 
-      {/* Step 2: Results */}
+      {/* Step 2: Analyzing */}
+      {step === 'analyzing' && (
+        <div className="py-10 text-center">
+          <div className="w-10 h-10 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin mx-auto mb-6" />
+          <ul className="inline-block text-left space-y-1.5">
+            {PHOTO_LOADING_STEPS.map((s, i) => (
+              <li key={i} className="text-sm transition-colors duration-300" style={{
+                color: i < loadingStepIndex ? '#a8a29e' : i === loadingStepIndex ? '#1c1917' : '#d6d3d1',
+                fontWeight: i === loadingStepIndex ? 500 : 400,
+              }}>
+                {i < loadingStepIndex ? '✓ ' : i === loadingStepIndex ? '› ' : '  '}{s}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Step 3: Results */}
       {step === 'results' && result && (
         <div>
           {/* Summary bar */}
@@ -363,6 +403,28 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews }:
               <div className="flex flex-wrap gap-2">
                 {result.missingShots.map((s, i) => (
                   <span key={i} className="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-lg">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Suggested gallery order */}
+          {result.suggestedOrder && result.suggestedOrder.length > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4">
+              <p style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-blue-900 mb-2">
+                Recommended gallery order
+              </p>
+              <p className="text-xs text-blue-800 mb-3">Drag your Airbnb photos into this order for best results (retake photos excluded):</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {result.suggestedOrder.map((photoIndex, pos) => (
+                  <div key={pos} className="flex-shrink-0 text-center">
+                    <div className="relative">
+                      <img src={previews[photoIndex]} className="w-14 h-14 object-cover rounded-lg border border-blue-200" alt="" />
+                      <span className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                        {pos + 1}
+                      </span>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>

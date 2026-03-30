@@ -14,6 +14,37 @@ export interface ScrapedListing extends ListingInput {
   scrapeError?: string
 }
 
+/** Words that appear in Airbnb UI strings but are not amenities */
+const AMENITY_BLOCKLIST = [
+  'about this space', 'about this place', 'show more', 'show all', 'read more',
+  'amenities', 'reviews', 'location', 'policies', 'availability', 'things to know',
+  'house rules', 'safety', 'cancellation', 'check-in', 'checkout', 'check in',
+  'host', 'superhost', 'response', 'joined', 'verified', 'identity',
+  'share', 'save', 'report', 'translate', 'photos', 'map', 'reserve',
+  'night', 'total', 'taxes', 'fee', 'cleaning', 'price', 'per night',
+  'guest', 'guests', 'adult', 'adults', 'child', 'children', 'infant',
+  'bedroom', 'bedrooms', 'bed', 'beds', 'bath', 'baths', 'bathroom',
+  'entire home', 'entire place', 'private room', 'shared room',
+  'rare find', 'usually booked', 'free cancellation', 'great location',
+  'self check-in', // captured separately as a known amenity
+]
+
+/** Filter extracted strings to only plausible amenities */
+function isLikelyAmenity(s: string): boolean {
+  const lower = s.toLowerCase()
+  // Reject blocklisted UI strings
+  if (AMENITY_BLOCKLIST.some(b => lower === b || lower.startsWith(b + ' '))) return false
+  // Reject strings that are just numbers or dates
+  if (/^\d+$/.test(s) || /^\d{1,2}\/\d{1,2}/.test(s)) return false
+  // Reject strings with URLs
+  if (lower.includes('http') || lower.includes('www.')) return false
+  // Reject very short (1-2 chars) or very long (>60 chars)
+  if (s.length < 3 || s.length > 60) return false
+  // Reject strings that look like sentences (have 5+ words, likely descriptions)
+  if (s.split(/\s+/).length > 6) return false
+  return true
+}
+
 /** Extract the numeric listing ID from an Airbnb URL */
 function extractListingId(url: string): string | null {
   const match = url.match(/rooms\/(\d+)/)
@@ -110,7 +141,7 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     if (amenityMatches) {
       const found = amenityMatches
         .map(m => m.match(/"title":\s*"([^"]+)"/)?.[1] ?? '')
-        .filter(a => a && !a.includes('\\') && a.length > 1 && a.length < 50)
+        .filter(a => a && !a.includes('\\') && isLikelyAmenity(a))
       amenities = Array.from(new Set(found)).slice(0, 50)
     }
 
@@ -251,7 +282,7 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
         const amenityMatches = dataStr.match(/"title":\s*"([^"]{2,50})"/g)
         if (amenityMatches) {
           amenities = Array.from(new Set(
-            amenityMatches.map(m => m.match(/"title":\s*"([^"]+)"/)?.[1] ?? '').filter(a => a && a.length > 1 && a.length < 50)
+            amenityMatches.map(m => m.match(/"title":\s*"([^"]+)"/)?.[1] ?? '').filter(a => a && isLikelyAmenity(a))
           )).slice(0, 50)
         }
       }

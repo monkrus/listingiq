@@ -3,16 +3,16 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'ListingIQ — Airbnb Listing Analyzer',
-  description: 'AI-powered Airbnb listing score and optimization report in 20 seconds.',
+  description: 'AI-powered Airbnb listing score and optimization report.',
   openGraph: {
     title: 'ListingIQ — Airbnb Listing Analyzer',
-    description: 'AI-powered Airbnb listing score and optimization report in 20 seconds.',
+    description: 'AI-powered Airbnb listing score and optimization report.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'ListingIQ — Airbnb Listing Analyzer',
-    description: 'AI-powered Airbnb listing score and optimization report in 20 seconds.',
+    description: 'AI-powered Airbnb listing score and optimization report.',
   },
 }
 

@@ -1,6 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPayment } from '@/app/lib/verify-payment'
+import { rateLimit } from '@/app/lib/rate-limit'
+import { usePhotoCredit } from '@/app/lib/session-usage'
+import { checkOrigin } from '@/app/lib/check-origin'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -21,6 +24,7 @@ export interface PhotoAnalysisResult {
   overallPhotoScore: number
   missingShots: string[]
   heroSuggestion: string
+  suggestedOrder: number[]
 }
 
 const PHOTO_SYSTEM = `You are an expert Airbnb photography consultant. Analyze each photo in the context of the listing it belongs to — consider what the listing promises and whether the photos deliver on that promise.
@@ -41,8 +45,9 @@ Return ONLY valid JSON — no markdown, no backticks:
     }
   ],
   "overallPhotoScore": <0-100>,
-  "missingShots": ["shot type missing — explain why this matters for the listing"],
-  "heroSuggestion": "Which photo should be #1 and why — tie it to the listing's key selling points"
+  "missingShots": ["shot type missing — explain why this matters for the listing"] — maximum 5, ranked by impact,
+  "heroSuggestion": "Which photo should be #1 and why — tie it to the listing's key selling points",
+  "suggestedOrder": [3, 0, 5, 1, 2, ...] — recommended gallery order as photo indices (0-based), best photos first. Only include "keep" photos. Retake photos should be excluded from the suggested order since they need to be reshot.
 }
 
 HERO SHOTS:
@@ -105,16 +110,29 @@ function buildMockResult(filenames: string[]): PhotoAnalysisResult {
     }
   })
 
+  const keepIndices = photos.filter(p => p.verdict === 'keep').sort((a, b) => b.score - a.score).map(p => p.index)
   return {
     overallPhotoScore: 64,
     heroSuggestion: `Photo #${photos.findIndex(p => p.heroWorthy) + 1 || 1} has the strongest composition — consider using it as your cover image for maximum click-through in search results.`,
     missingShots: ['Street / neighborhood context', 'Workspace / desk area', 'Amenity close-ups'],
+    suggestedOrder: keepIndices,
     photos,
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    // Origin check — reject requests from external sites
+    const originBlock = checkOrigin(req)
+    if (originBlock) return originBlock
+
+    // Rate limit: 3 photo analyses per minute per IP
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    const { limited } = rateLimit(ip, 3, 60_000)
+    if (limited) {
+      return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
+    }
+
     const formData = await req.formData()
     const files = formData.getAll('photos') as File[]
 
@@ -128,25 +146,36 @@ export async function POST(req: NextRequest) {
 
     // Server-side file validation — don't trust client-side checks
     const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-    const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB per file
+    const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4 MB per file (keeps memory under ~55MB for 10 photos)
+    const MAX_TOTAL_SIZE = 20 * 1024 * 1024 // 20 MB total
+    let totalSize = 0
     for (const file of files) {
       if (!ALLOWED_TYPES.includes(file.type)) {
         return NextResponse.json({ error: `Invalid file type: ${file.type}. Allowed: JPG, PNG, WebP` }, { status: 400 })
       }
       if (file.size > MAX_FILE_SIZE) {
-        return NextResponse.json({ error: `File too large (max 10 MB per photo): ${file.name}` }, { status: 400 })
+        return NextResponse.json({ error: `${file.name} is too large (max 4 MB per photo). Please resize before uploading.` }, { status: 400 })
       }
+      totalSize += file.size
+    }
+    if (totalSize > MAX_TOTAL_SIZE) {
+      return NextResponse.json({ error: `Total upload size exceeds 20 MB. Please reduce photo sizes or upload fewer photos.` }, { status: 400 })
     }
 
     // Verify payment for non-mock requests
-    // TODO: Re-enable payment verification before going live
-    // if (!USE_MOCK) {
-    //   const sessionId = formData.get('sessionId') as string | null
-    //   const payment = await verifyPayment(sessionId)
-    //   if (!payment.valid) {
-    //     return NextResponse.json({ error: payment.error || 'Payment required' }, { status: 403 })
-    //   }
-    // }
+    const isDev = process.env.NODE_ENV === 'development'
+    if (!USE_MOCK && !isDev) {
+      const sessionId = formData.get('sessionId') as string | null
+      const payment = await verifyPayment(sessionId)
+      if (!payment.valid) {
+        return NextResponse.json({ error: payment.error || 'Payment required' }, { status: 403 })
+      }
+      // Check session usage limits
+      const credit = usePhotoCredit(sessionId!, payment.plan)
+      if (!credit.allowed) {
+        return NextResponse.json({ error: credit.error }, { status: 403 })
+      }
+    }
 
     // Return mock data when USE_MOCK_API is enabled
     if (USE_MOCK) {
@@ -229,8 +258,8 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
         filename: filenames[i] || p.filename,
       }))
     } catch (apiErr) {
-      console.warn('[photo-analyze] API call failed, using fallback:', apiErr instanceof Error ? apiErr.message : apiErr)
-      result = buildMockResult(filenames)
+      console.error('[photo-analyze] API call failed:', apiErr instanceof Error ? apiErr.message : apiErr)
+      return NextResponse.json({ error: 'Photo analysis failed. Please try again.' }, { status: 502 })
     }
 
     return NextResponse.json(result)

@@ -36,6 +36,7 @@ export const DEMO_PHOTO_RESULT: PhotoAnalysisResult = {
   overallPhotoScore: 64,
   heroSuggestion: 'Photo #1 (exterior) should remain your hero — it has strong curb appeal, but reshoot at golden hour for warmer tones.',
   missingShots: ['Street / neighborhood context', 'Workspace / desk area', 'Amenity close-ups (coffee maker, smart TV)'],
+  suggestedOrder: [0, 2, 1, 5],
   photos: [
     {
       index: 0,

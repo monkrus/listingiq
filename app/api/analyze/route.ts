@@ -4,6 +4,9 @@ import { ListingInput } from '@/app/lib/types'
 import { scrapeAirbnbListing, isValidAirbnbUrl } from '@/app/lib/scraper'
 import { saveReport } from '@/app/lib/supabase'
 import { verifyPayment } from '@/app/lib/verify-payment'
+import { rateLimit } from '@/app/lib/rate-limit'
+import { useAnalysisCredit } from '@/app/lib/session-usage'
+import { checkOrigin } from '@/app/lib/check-origin'
 
 const USE_MOCK = process.env.USE_MOCK_API === 'true'
 
@@ -262,19 +265,36 @@ Provide a detailed, actionable optimization report. Be specific — reference th
 
 export async function POST(req: NextRequest) {
   try {
-    const body: ListingInput & { userId?: string; sessionId?: string } = await req.json()
+    // Origin check — reject requests from external sites
+    const originBlock = checkOrigin(req)
+    if (originBlock) return originBlock
+
+    // Rate limit: 5 requests per minute per IP
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+    const { limited } = rateLimit(ip, 5, 60_000)
+    if (limited) {
+      return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
+    }
+
+    const body: ListingInput & { userId?: string; sessionId?: string; plan?: string } = await req.json()
+    const plan = body.plan || 'quick-score'
 
     // Demo mode — always allow so the demo button works regardless of mock/live mode
     const isDemo = body.isDemo === true
 
     // Verify payment for non-demo, non-mock requests
-    // TODO: Re-enable payment verification before going live
-    // if (!USE_MOCK) {
-    //   const payment = await verifyPayment(body.sessionId)
-    //   if (!payment.valid) {
-    //     return NextResponse.json({ error: payment.error || 'Payment required' }, { status: 403 })
-    //   }
-    // }
+    const isDev = process.env.NODE_ENV === 'development'
+    if (!isDemo && !USE_MOCK && !isDev) {
+      const payment = await verifyPayment(body.sessionId)
+      if (!payment.valid) {
+        return NextResponse.json({ error: payment.error || 'Payment required' }, { status: 403 })
+      }
+      // Check session usage limits (prevent session ID reuse)
+      const credit = useAnalysisCredit(body.sessionId!, payment.plan || plan)
+      if (!credit.allowed) {
+        return NextResponse.json({ error: credit.error }, { status: 403 })
+      }
+    }
 
     // Return mock data for demo or when USE_MOCK_API is enabled
     if (isDemo || USE_MOCK) {
@@ -290,7 +310,7 @@ export async function POST(req: NextRequest) {
 
     // If a real Airbnb URL is provided (not demo), attempt to scrape it
     if (!body.isDemo && body.url && isValidAirbnbUrl(body.url)) {
-      console.log('[analyze] Scraping:', body.url)
+      console.log(`[analyze] Plan: ${plan} | Scraping:`, body.url)
       const scraped = await scrapeAirbnbListing(body.url)
 
       if (scraped.scrapeSuccess && scraped.title) {
@@ -348,7 +368,7 @@ export async function POST(req: NextRequest) {
       ).catch(err => console.warn('[analyze] Failed to save report:', err))
     }
 
-    return NextResponse.json({ ...report, wasScraped })
+    return NextResponse.json({ ...report, wasScraped, plan })
   } catch (err) {
     console.error('[analyze] Error:', err)
     return NextResponse.json({ error: 'Analysis failed. Check your API key and try again.' }, { status: 500 })

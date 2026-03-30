@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/app/lib/stripe'
 import { getSupabaseAdmin } from '@/app/lib/supabase'
+import { registerPaidSession } from '@/app/lib/session-usage'
 import Stripe from 'stripe'
 
 export const runtime = 'nodejs'
@@ -8,7 +9,13 @@ export const runtime = 'nodejs'
 export async function POST(req: NextRequest) {
   const body = await req.text()
   const sig = req.headers.get('stripe-signature')!
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+
+  // If webhook secret isn't configured, reject all webhook calls
+  if (!webhookSecret || webhookSecret === 'whsec_your-secret-here') {
+    console.error('[webhook] STRIPE_WEBHOOK_SECRET not configured — rejecting webhook')
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
+  }
 
   let event: Stripe.Event
   try {
@@ -23,9 +30,12 @@ export async function POST(req: NextRequest) {
 
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
-        const planKey = session.metadata?.planKey
+        const planKey = session.metadata?.planKey || 'quick-score'
         const email = session.customer_details?.email || session.metadata?.email
-        console.log(`[webhook] Checkout completed: plan=${planKey} email=${email}`)
+        console.log(`[webhook] Checkout completed: session=${session.id} plan=${planKey} email=${email}`)
+
+        // Register the session in our usage tracker so the API routes can validate it
+        registerPaidSession(session.id, planKey)
 
         // Add credits if Supabase is configured and we can identify the user
         const db = getSupabaseAdmin()
