@@ -18,9 +18,6 @@ export function getStripe(): Stripe {
   if (!_stripe) {
     const envKey = 'STRIPE_SECRET_KEY'
     const key = process.env[envKey]
-    const allStripeVars = Object.keys(process.env).filter(k => k.startsWith('STRIPE'))
-    console.log(`[stripe] Available STRIPE env vars: ${JSON.stringify(allStripeVars)}`)
-    console.log(`[stripe] ${envKey} present: ${!!key}, length: ${key?.length ?? 0}, prefix: ${key?.slice(0, 8) ?? 'MISSING'}`)
     if (!key || key === 'build-placeholder') {
       throw new Error('STRIPE_SECRET_KEY is not configured at runtime')
     }
