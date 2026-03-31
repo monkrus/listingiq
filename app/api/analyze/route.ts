@@ -290,7 +290,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: payment.error || 'Payment required' }, { status: 403 })
       }
       // Check session usage limits (prevent session ID reuse)
-      const credit = useAnalysisCredit(body.sessionId!, payment.plan || plan)
+      const credit = await useAnalysisCredit(body.sessionId!, payment.plan || plan)
       if (!credit.allowed) {
         return NextResponse.json({ error: credit.error }, { status: 403 })
       }

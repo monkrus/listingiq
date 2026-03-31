@@ -1,10 +1,13 @@
 /**
- * In-memory session usage tracker.
- * Prevents session ID reuse by limiting how many API calls each paid session can make.
+ * Session usage tracker with Stripe metadata persistence.
+ * Uses in-memory cache for speed, Stripe session metadata for durability.
+ * Survives container restarts by checking Stripe metadata as source of truth.
  *
  * Quick Score: 1 analysis
  * Full Audit:  1 analysis + 1 photo analysis
  */
+
+import { stripe } from './stripe'
 
 interface SessionUsage {
   analyzeCount: number
@@ -30,7 +33,6 @@ setInterval(() => {
 
 /**
  * Pre-register a session from the Stripe webhook.
- * Called when checkout.session.completed fires, before the user hits the API.
  */
 export function registerPaidSession(sessionId: string, plan: string): void {
   if (!sessions.has(sessionId)) {
@@ -40,22 +42,51 @@ export function registerPaidSession(sessionId: string, plan: string): void {
 }
 
 /**
- * Get or create a session entry.
- * Called when the session is first seen by an API route (fallback if webhook hasn't fired yet).
+ * Load usage state from Stripe metadata if not in memory.
  */
-function ensureSession(sessionId: string, plan: string): SessionUsage {
-  if (!sessions.has(sessionId)) {
-    sessions.set(sessionId, { analyzeCount: 0, photoCount: 0, plan, createdAt: Date.now() })
+async function ensureSessionFromStripe(sessionId: string, plan: string): Promise<SessionUsage> {
+  if (sessions.has(sessionId)) {
+    return sessions.get(sessionId)!
   }
-  return sessions.get(sessionId)!
+
+  // Check Stripe metadata for prior usage (survives restarts)
+  try {
+    const stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
+    const meta = stripeSession.metadata || {}
+    const usage: SessionUsage = {
+      analyzeCount: meta.analyze_used === 'true' ? 1 : 0,
+      photoCount: meta.photo_used === 'true' ? 1 : 0,
+      plan: meta.planKey || plan,
+      createdAt: Date.now(),
+    }
+    sessions.set(sessionId, usage)
+    return usage
+  } catch {
+    // Fallback: create fresh entry
+    const usage: SessionUsage = { analyzeCount: 0, photoCount: 0, plan, createdAt: Date.now() }
+    sessions.set(sessionId, usage)
+    return usage
+  }
+}
+
+/**
+ * Mark a credit as used in Stripe metadata (persistent).
+ */
+async function markUsedInStripe(sessionId: string, field: 'analyze_used' | 'photo_used'): Promise<void> {
+  try {
+    await stripe.checkout.sessions.update(sessionId, {
+      metadata: { [field]: 'true' },
+    })
+  } catch (err) {
+    console.error(`[session-usage] Failed to update Stripe metadata for ${sessionId}:`, err)
+  }
 }
 
 /**
  * Check and consume an analysis credit for this session.
- * Returns { allowed: true } if the session has remaining credits, false otherwise.
  */
-export function useAnalysisCredit(sessionId: string, plan: string): { allowed: boolean; error?: string } {
-  const usage = ensureSession(sessionId, plan)
+export async function useAnalysisCredit(sessionId: string, plan: string): Promise<{ allowed: boolean; error?: string }> {
+  const usage = await ensureSessionFromStripe(sessionId, plan)
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['quick-score']
 
   if (usage.analyzeCount >= limits.analyze) {
@@ -63,14 +94,15 @@ export function useAnalysisCredit(sessionId: string, plan: string): { allowed: b
   }
 
   usage.analyzeCount++
+  await markUsedInStripe(sessionId, 'analyze_used')
   return { allowed: true }
 }
 
 /**
  * Check and consume a photo analysis credit for this session.
  */
-export function usePhotoCredit(sessionId: string, plan: string): { allowed: boolean; error?: string } {
-  const usage = ensureSession(sessionId, plan)
+export async function usePhotoCredit(sessionId: string, plan: string): Promise<{ allowed: boolean; error?: string }> {
+  const usage = await ensureSessionFromStripe(sessionId, plan)
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['quick-score']
 
   if (limits.photo === 0) {
@@ -82,5 +114,6 @@ export function usePhotoCredit(sessionId: string, plan: string): { allowed: bool
   }
 
   usage.photoCount++
+  await markUsedInStripe(sessionId, 'photo_used')
   return { allowed: true }
 }
