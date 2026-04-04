@@ -340,7 +340,7 @@ export default function Home() {
           Questions? <a href="https://m.me/redhiker" target="_blank" rel="noopener noreferrer" className="underline hover:text-stone-600">Message us on Facebook</a>
         </p>
 
-        <div className="text-[11px] text-stone-600 text-center mt-6 leading-relaxed max-w-md mx-auto space-y-2">
+        <div className="text-[11px] text-stone-600 text-center mt-6 leading-relaxed max-w-md mx-auto space-y-2 font-bold">
           <p>
             This report analyses your listing&apos;s text, title, photos, and presentation. Pricing strategy, calendar management, minimum-stay rules, and demand-based adjustments are outside this tool&apos;s scope but significantly impact performance.
           </p>
