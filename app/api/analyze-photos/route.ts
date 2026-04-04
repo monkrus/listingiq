@@ -47,7 +47,7 @@ Return ONLY valid JSON — no markdown, no backticks:
   "overallPhotoScore": <0-100>,
   "missingShots": ["shot type missing — explain why this matters for the listing"] — maximum 5, ranked by impact,
   "heroSuggestion": "Which photo should be #1 and why — tie it to the listing's key selling points",
-  "suggestedOrder": [3, 0, 5, 1, 2, ...] — recommended gallery order as photo indices (0-based), best photos first. Only include "keep" photos. Retake photos should be excluded from the suggested order since they need to be reshot.
+  "suggestedOrder": [3, 0, 5, 1, 2, ...] — recommended gallery order as photo indices (0-based) for ALL uploaded photos, best photos first. Include every photo — both "keep" and "retake" — so the host sees the full optimal sequence. Place stronger photos earlier and weaker ones later.
 }
 
 HERO SHOTS:
@@ -110,12 +110,12 @@ function buildMockResult(filenames: string[]): PhotoAnalysisResult {
     }
   })
 
-  const keepIndices = photos.filter(p => p.verdict === 'keep').sort((a, b) => b.score - a.score).map(p => p.index)
+  const allIndicesByScore = [...photos].sort((a, b) => b.score - a.score).map(p => p.index)
   return {
     overallPhotoScore: 64,
     heroSuggestion: `Photo #${photos.findIndex(p => p.heroWorthy) + 1 || 1} has the strongest composition — consider using it as your cover image for maximum click-through in search results.`,
     missingShots: ['Street / neighborhood context', 'Workspace / desk area', 'Amenity close-ups'],
-    suggestedOrder: keepIndices,
+    suggestedOrder: allIndicesByScore,
     photos,
   }
 }

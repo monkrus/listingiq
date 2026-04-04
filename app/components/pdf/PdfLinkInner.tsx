@@ -32,7 +32,7 @@ export default function PdfLinkInner({ data, photoResults, photoPreviews, listin
         return (
           <span
             style={{ fontFamily: 'var(--font-syne)' }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-stone-900 text-white text-sm font-bold rounded-xl hover:bg-stone-700 transition-colors cursor-pointer tracking-wide"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white text-sm font-bold rounded-xl hover:bg-emerald-600 transition-colors cursor-pointer tracking-wide shadow-sm"
           >
             {loading ? 'Building PDF...' : 'Download PDF'}
           </span>

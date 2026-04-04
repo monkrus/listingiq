@@ -109,7 +109,7 @@ function CopyReportButton({ data, listingUrl }: { data: ReportData; listingUrl?:
     <button
       onClick={handleCopy}
       style={{ fontFamily: 'var(--font-syne)' }}
-      className="inline-flex items-center gap-2 px-4 py-2 bg-stone-100 text-stone-700 text-sm font-bold rounded-xl hover:bg-stone-200 transition-colors cursor-pointer tracking-wide border border-stone-200"
+      className="inline-flex items-center gap-2 px-4 py-2 bg-amber-400 text-stone-900 text-sm font-bold rounded-xl hover:bg-amber-500 transition-colors cursor-pointer tracking-wide shadow-sm"
     >
       {copied ? 'Copied!' : 'Copy report'}
     </button>

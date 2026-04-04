@@ -5,6 +5,7 @@
  * Fallback: Playwright (local dev only)
  */
 
+import { ApifyClient } from 'apify-client'
 import { ListingInput } from '../types'
 export { isValidAirbnbUrl } from '../validation'
 
@@ -499,13 +500,114 @@ async function playwrightScrape(url: string): Promise<ScrapedListing> {
 }
 
 /**
+ * Apify-based scraper — uses a managed Airbnb scraper actor.
+ * Most reliable at scale, handles anti-bot measures.
+ */
+async function apifyScrape(url: string): Promise<ScrapedListing> {
+  const base: ScrapedListing = {
+    url,
+    isDemo: false,
+    scrapedAt: new Date().toISOString(),
+    scrapeSuccess: false,
+  }
+
+  const token = process.env.APIFY_API_TOKEN
+  if (!token) {
+    return { ...base, scrapeError: 'APIFY_API_TOKEN not configured' }
+  }
+
+  try {
+    const client = new ApifyClient({ token })
+
+    // Use the tri_angle Airbnb scraper actor (most maintained community actor)
+    const run = await client.actor('tri_angle/airbnb-scraper').call({
+      startUrls: [{ url }],
+      maxListings: 1,
+      includeReviews: true,
+      maxReviews: 12,
+      simple: false,
+      currency: 'USD',
+      proxyConfiguration: { useApifyProxy: true },
+    }, {
+      timeout: 120, // seconds — single listing typically takes 30-90s
+      memory: 256,
+    })
+
+    const { items } = await client.dataset(run.defaultDatasetId).listItems({ limit: 1 })
+
+    if (!items.length) {
+      return { ...base, scrapeError: 'Apify returned no results' }
+    }
+
+    const item = items[0] as Record<string, unknown>
+
+    const title = (item.name as string) || ''
+    const description = (item.description as string) || ''
+    const location = [item.city, item.state, item.country].filter(Boolean).join(', ')
+    const rating = typeof item.stars === 'number' ? item.stars
+      : typeof item.rating === 'number' ? item.rating : 0
+    const reviewCount = typeof item.reviewsCount === 'number' ? (item.reviewsCount as number) : 0
+    const photoCount = Array.isArray(item.photos) ? (item.photos as unknown[]).length : 0
+
+    // Extract amenities
+    let amenities: string[] = []
+    if (Array.isArray(item.amenities)) {
+      amenities = (item.amenities as string[]).filter(a => typeof a === 'string' && isLikelyAmenity(a)).slice(0, 50)
+    }
+
+    // Extract reviews
+    let reviews: string[] = []
+    if (Array.isArray(item.reviews)) {
+      reviews = (item.reviews as Record<string, unknown>[])
+        .map(r => (r.comments as string) || (r.text as string) || '')
+        .filter(r => r.length > 15)
+        .slice(0, 12)
+    }
+
+    if (!title && !description) {
+      return { ...base, scrapeError: 'Apify returned empty listing data' }
+    }
+
+    console.log(`[scraper:apify] Success — title: ${title}, rating: ${rating}, reviews: ${reviewCount}`)
+
+    return {
+      ...base,
+      title,
+      location,
+      description,
+      photoCount,
+      rating,
+      reviewCount,
+      amenities,
+      reviews,
+      scrapeSuccess: true,
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[scraper:apify] Failed:', msg)
+    return { ...base, scrapeError: msg }
+  }
+}
+
+/**
  * Main scraper entry point.
- * 1. API-based (most reliable on Vercel)
- * 2. HTML fetch fallback
- * 3. Playwright fallback (local dev only)
+ * 1. Apify (most reliable at scale)
+ * 2. API-based (fast, no external dependency)
+ * 3. HTML fetch fallback
+ * 4. Playwright fallback (local dev only)
  */
 export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> {
-  // Try API-based scraping first (works on Vercel)
+  // Try Apify first (most reliable at scale)
+  if (process.env.APIFY_API_TOKEN) {
+    console.log('[scraper] Trying Apify scrape...')
+    const apifyResult = await apifyScrape(url)
+    if (apifyResult.scrapeSuccess) {
+      return apifyResult
+    }
+    console.warn('[scraper] Apify scrape failed:', apifyResult.scrapeError)
+  }
+
+  // Try API-based scraping (works on Vercel)
   console.log('[scraper] Trying API-based scrape...')
   const apiResult = await apiScrape(url)
   if (apiResult.scrapeSuccess) {

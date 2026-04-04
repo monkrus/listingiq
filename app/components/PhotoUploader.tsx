@@ -414,7 +414,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews }:
               <p style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-blue-900 mb-2">
                 Recommended gallery order
               </p>
-              <p className="text-xs text-blue-800 mb-3">Drag your Airbnb photos into this order for best results (retake photos excluded):</p>
+              <p className="text-xs text-blue-800 mb-3">Drag your Airbnb photos into this order for best results:</p>
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {result.suggestedOrder.map((photoIndex, pos) => (
                   <div key={pos} className="flex-shrink-0 text-center">
