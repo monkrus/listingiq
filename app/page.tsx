@@ -231,14 +231,14 @@ export default function Home() {
                   style={{ fontFamily: 'var(--font-syne)' }}
                   className="h-11 px-5 bg-stone-900 text-white text-sm font-bold rounded-xl hover:bg-stone-700 transition-colors whitespace-nowrap tracking-wide"
                 >
-                  Analyze →
+                  Analyze
                 </button>
               </div>
               {error && <p className="text-red-500 text-xs mb-3 text-center">{error}</p>}
               <div className="flex items-center justify-between text-xs text-stone-600">
                 <span>From $29 · no account needed</span>
                 <button onClick={handleDemo} className="text-blue-500 underline hover:text-blue-700">
-                  Try demo →
+                  Try demo
                 </button>
               </div>
             </>
