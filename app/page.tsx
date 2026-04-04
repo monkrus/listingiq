@@ -216,7 +216,7 @@ export default function Home() {
           {/* Step 1: URL input */}
           {step === 'input' && (
             <>
-              <p className="text-sm text-stone-500 mb-2 font-medium text-center">Paste your Airbnb listing link below to get started</p>
+              <p className="text-sm text-stone-500 mb-2 font-medium text-center">Paste your Airbnb listing link below</p>
               <div className="flex gap-2.5 mb-4">
                 <input
                   type="text"
