@@ -121,7 +121,7 @@ function SectionCard({ title, score, children }: { title: string; score: number;
   const pillBg = score >= 80 ? '#dcfce7' : score >= 60 ? '#fef3c7' : '#fee2e2'
   const pillColor = score >= 80 ? '#166534' : score >= 60 ? '#92400e' : '#991b1b'
   return (
-    <View style={s.sectionCard} minPresenceAhead={60}>
+    <View style={s.sectionCard} wrap={false}>
       <View style={s.sectionHeader}>
         <Text style={s.sectionTitle}>{title}</Text>
         <View style={[s.scorePill, { backgroundColor: pillBg }]}>
