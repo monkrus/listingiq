@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         verified: true,
         plan: session.metadata?.planKey || 'quick-score',
+        listingUrl: session.metadata?.listingUrl || '',
       })
     }
 

@@ -29,7 +29,8 @@ function SuccessContent() {
       .then(data => {
         if (data.verified) {
           localStorage.setItem('listingiq_session_id', sessionId!)
-          router.replace(`/?paid=1&plan=${data.plan || plan}`)
+          const urlParam = data.listingUrl ? `&url=${encodeURIComponent(data.listingUrl)}` : ''
+          router.replace(`/?paid=1&plan=${data.plan || plan}${urlParam}`)
         } else {
           setError(data.error || 'Payment could not be verified.')
         }

@@ -51,8 +51,9 @@ export default function Home() {
       // Clear old report if upgrading to a different plan
       localStorage.removeItem('listingiq_report')
       localStorage.removeItem('listingiq_plan')
-      // Run analysis with saved URL
-      const savedUrl = localStorage.getItem('listingiq_url')
+      // Run analysis with URL from query param (email link) or localStorage (direct flow)
+      const urlParam = params.get('url')
+      const savedUrl = urlParam || localStorage.getItem('listingiq_url')
       if (savedUrl) {
         setUrl(savedUrl)
         analyze({ url: savedUrl })
