@@ -56,7 +56,7 @@ export default function Home() {
       const savedUrl = urlParam || localStorage.getItem('listingiq_url')
       if (savedUrl) {
         setUrl(savedUrl)
-        analyze({ url: savedUrl })
+        analyze({ url: savedUrl, reaccess: !!urlParam })
       }
       // If no saved URL (e.g. came from /pricing), user stays on input step
       // with isPaid=true so handleSubmit will skip plan selection
@@ -97,7 +97,7 @@ export default function Home() {
     }
   }
 
-  async function analyze(payload: ListingInput) {
+  async function analyze(payload: ListingInput & { reaccess?: boolean }) {
     setError('')
     setLoading(true)
     setStep('loading')

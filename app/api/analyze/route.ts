@@ -276,7 +276,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
     }
 
-    const body: ListingInput & { userId?: string; sessionId?: string; plan?: string } = await req.json()
+    const body: ListingInput & { userId?: string; sessionId?: string; plan?: string; reaccess?: boolean } = await req.json()
     const plan = body.plan || 'quick-score'
 
     // Demo mode — always allow so the demo button works regardless of mock/live mode
@@ -289,8 +289,8 @@ export async function POST(req: NextRequest) {
       if (!payment.valid) {
         return NextResponse.json({ error: payment.error || 'Payment required' }, { status: 403 })
       }
-      // Check session usage limits (prevent session ID reuse)
-      const credit = await useAnalysisCredit(body.sessionId!, payment.plan || plan)
+      // Check session usage limits (prevent session ID reuse, allow re-access from email)
+      const credit = await useAnalysisCredit(body.sessionId!, payment.plan || plan, { reaccess: body.reaccess })
       if (!credit.allowed) {
         return NextResponse.json({ error: credit.error }, { status: 403 })
       }

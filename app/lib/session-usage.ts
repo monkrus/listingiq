@@ -85,11 +85,15 @@ async function markUsedInStripe(sessionId: string, field: 'analyze_used' | 'phot
 /**
  * Check and consume an analysis credit for this session.
  */
-export async function useAnalysisCredit(sessionId: string, plan: string): Promise<{ allowed: boolean; error?: string }> {
+export async function useAnalysisCredit(sessionId: string, plan: string, opts?: { reaccess?: boolean }): Promise<{ allowed: boolean; error?: string }> {
   const usage = await ensureSessionFromStripe(sessionId, plan)
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['quick-score']
 
   if (usage.analyzeCount >= limits.analyze) {
+    // Allow re-access from email link (same session, same listing)
+    if (opts?.reaccess) {
+      return { allowed: true }
+    }
     return { allowed: false, error: 'This payment session has already been used for an analysis. Please purchase a new report.' }
   }
 
