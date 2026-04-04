@@ -216,7 +216,7 @@ export default function Home() {
           {/* Step 1: URL input */}
           {step === 'input' && (
             <>
-              <p className="text-sm text-stone-500 mb-2 font-medium text-center">Paste your Airbnb listing link below</p>
+              <p className="text-sm text-stone-500 mb-2 font-medium">Paste your Airbnb listing link below</p>
               <div className="flex gap-2.5 mb-4">
                 <input
                   type="text"
@@ -235,7 +235,7 @@ export default function Home() {
                 </button>
               </div>
               {error && <p className="text-red-500 text-xs mb-3 text-center">{error}</p>}
-              <p className="text-xs text-stone-600 text-center">
+              <p className="text-xs text-stone-600">
                 From $29 · no account needed · <button onClick={handleDemo} className="text-blue-500 underline hover:text-blue-700">Try demo</button>
               </p>
             </>
