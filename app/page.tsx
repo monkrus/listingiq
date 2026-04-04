@@ -216,34 +216,28 @@ export default function Home() {
           {/* Step 1: URL input */}
           {step === 'input' && (
             <>
+              <p className="text-sm text-stone-500 mb-2 font-medium text-center">Paste your Airbnb listing link below</p>
               <div className="flex gap-2.5 mb-4">
-                <div className="flex-1">
-                  <p className="text-sm text-stone-500 mb-2 font-medium text-center">Paste your Airbnb listing link below</p>
-                  <input
-                    type="text"
-                    value={url}
-                    onChange={e => { setUrl(e.target.value); setError('') }}
-                    onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                    placeholder="https://airbnb.com/rooms/..."
-                    className="w-full h-11 px-4 rounded-xl border border-stone-200 bg-stone-50 text-sm text-stone-900 outline-none focus:border-stone-400 placeholder-stone-300"
-                  />
-                  {error && <p className="text-red-500 text-xs mt-2 text-center">{error}</p>}
-                  <div className="flex items-center justify-center gap-3 text-xs text-stone-600 mt-3">
-                    <span>From $29 · no account needed</span>
-                    <span>·</span>
-                    <button onClick={handleDemo} className="text-blue-500 underline hover:text-blue-700">
-                      Try demo
-                    </button>
-                  </div>
-                </div>
+                <input
+                  type="text"
+                  value={url}
+                  onChange={e => { setUrl(e.target.value); setError('') }}
+                  onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                  placeholder="https://airbnb.com/rooms/..."
+                  className="flex-1 h-11 px-4 rounded-xl border border-stone-200 bg-stone-50 text-sm text-stone-900 outline-none focus:border-stone-400 placeholder-stone-300"
+                />
                 <button
                   onClick={handleSubmit}
                   style={{ fontFamily: 'var(--font-syne)' }}
-                  className="h-11 mt-7 px-5 bg-stone-900 text-white text-sm font-bold rounded-xl hover:bg-stone-700 transition-colors whitespace-nowrap tracking-wide"
+                  className="h-11 px-5 bg-stone-900 text-white text-sm font-bold rounded-xl hover:bg-stone-700 transition-colors whitespace-nowrap tracking-wide"
                 >
                   Analyze
                 </button>
               </div>
+              {error && <p className="text-red-500 text-xs mb-3 text-center">{error}</p>}
+              <p className="text-xs text-stone-600 text-center">
+                From $29 · no account needed · <button onClick={handleDemo} className="text-blue-500 underline hover:text-blue-700">Try demo</button>
+              </p>
             </>
           )}
 
