@@ -115,8 +115,11 @@ export default function Home() {
 
       setReport(data)
       setStep('report')
-      localStorage.setItem('listingiq_report', JSON.stringify(data))
-      localStorage.setItem('listingiq_plan', activePlan)
+      // Only persist paid reports — demo reports should not restore on page reload
+      if (!isDemo) {
+        localStorage.setItem('listingiq_report', JSON.stringify(data))
+        localStorage.setItem('listingiq_plan', activePlan)
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
       setStep('input')
