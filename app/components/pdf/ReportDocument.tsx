@@ -374,7 +374,7 @@ export function ReportDocument({ data: d, photoResults, photoPreviews, listingUr
           </SectionCard>
 
           {/* SEO */}
-          <View style={s.sectionCard} minPresenceAhead={60}>
+          <View style={s.sectionCard} wrap={false}>
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>Keywords & conversion tips</Text>
             </View>
