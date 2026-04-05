@@ -65,21 +65,15 @@ export default function Home() {
 
       const urlParam = params.get('url')
       const photoUploadParam = params.get('photoUploadId')
-      const isCheckout = params.get('checkout') === '1'
 
-      // Email re-access (no checkout flag): don't auto-regenerate, let user click Analyze
-      if (!isCheckout && urlParam) {
-        setUrl(urlParam)
-        localStorage.setItem('listingiq_url', urlParam)
-        return
-      }
-
-      // Direct Stripe redirect (first visit after payment): auto-analyze
+      // Auto-analyze: works for both fresh Stripe redirect and email re-access
+      // (server-side report cache ensures same results are returned quickly)
       localStorage.removeItem('listingiq_report')
       localStorage.removeItem('listingiq_plan')
       const savedUrl = urlParam || localStorage.getItem('listingiq_url')
       if (savedUrl) {
         setUrl(savedUrl)
+        localStorage.setItem('listingiq_url', savedUrl)
         if (photoUploadParam) {
           setPhotoUploadId(photoUploadParam)
         }
