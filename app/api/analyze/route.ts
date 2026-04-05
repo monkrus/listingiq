@@ -89,6 +89,20 @@ SCORING ANCHOR — account for proven performance:
 - High review counts and ratings reflect real guest satisfaction — the score should acknowledge that. Deduct points only for genuine, actionable copy improvements, not hypothetical ones.
 - The reviewScore for a 5.0-rated listing with 100+ reviews must be 95+. Do not penalize listings for "limited review data" when 100+ reviews exist.
 
+OVERALL SCORE CONSISTENCY — the overallScore must be realistic:
+- The overallScore MUST be within 10 points of the average of titleScore, descriptionScore, amenityScore, personaScore, and reviewScore. Do NOT inflate the overallScore beyond what the sub-scores support.
+- Example: if sub-scores average 60, the overallScore must be between 50 and 70.
+
+REVIEW SCORE — penalize low review counts:
+- Under 15 reviews: reviewScore MUST NOT exceed 70 regardless of rating, because the sample is too small to be statistically reliable. Note this in reviewRisks.
+- 15-30 reviews: reviewScore cap at 80.
+- 30-50 reviews: reviewScore cap at 85.
+- 50+ reviews: no cap — score based on rating and review content.
+
+PHOTO REFERENCES — do NOT comment on photo quality:
+- You have NOT seen the listing photos. Do NOT describe photos as "strong", "great", "professional", or any quality judgment in the summary or anywhere else.
+- Only reference the photo COUNT (e.g., "8 photos on the listing"). Photo quality is assessed separately in the photo analysis feature.
+
 VERIFY BEFORE RECOMMENDING — do NOT recommend what already exists:
 - Before suggesting any amenity addition (e.g., "add self check-in", "add dedicated workspace"), CHECK the provided amenities list. If the amenity is already listed, do NOT recommend adding it. Instead, suggest mentioning it more prominently in the description if it's under-highlighted.
 - Before suggesting a new description section (e.g., "add a What's Nearby section"), CHECK if the description already contains that information. If it does, do NOT recommend creating it. Instead suggest improving or expanding the existing content if warranted.
@@ -228,9 +242,42 @@ function validateReport(report: Record<string, unknown>, listing: ListingInput) 
     })
   }
 
+  // --- Review score cap based on review count ---
+  const reviewCount = listing.reviewCount ?? 0
+  const reviewScore = report.reviewScore as number
+  if (reviewCount < 15 && reviewScore > 70) {
+    console.log(`[validate] Capped reviewScore from ${reviewScore} to 70 (only ${reviewCount} reviews)`)
+    report.reviewScore = 70
+  } else if (reviewCount < 30 && reviewScore > 80) {
+    console.log(`[validate] Capped reviewScore from ${reviewScore} to 80 (only ${reviewCount} reviews)`)
+    report.reviewScore = 80
+  } else if (reviewCount < 50 && reviewScore > 85) {
+    console.log(`[validate] Capped reviewScore from ${reviewScore} to 85 (only ${reviewCount} reviews)`)
+    report.reviewScore = 85
+  }
+
+  // --- Overall score consistency with sub-scores ---
+  const subScores = [
+    report.titleScore as number,
+    report.descriptionScore as number,
+    report.amenityScore as number,
+    report.personaScore as number,
+    report.reviewScore as number,
+  ].filter(s => typeof s === 'number')
+  if (subScores.length > 0) {
+    const avg = Math.round(subScores.reduce((a, b) => a + b, 0) / subScores.length)
+    const overall = report.overallScore as number
+    if (overall > avg + 10) {
+      console.log(`[validate] Clamped overallScore from ${overall} to ${avg + 10} (sub-score avg=${avg})`)
+      report.overallScore = avg + 10
+    } else if (overall < avg - 10) {
+      console.log(`[validate] Raised overallScore from ${overall} to ${avg - 10} (sub-score avg=${avg})`)
+      report.overallScore = avg - 10
+    }
+  }
+
   // --- Scoring floor enforcement for proven high-performers ---
   const rating = listing.rating ?? 0
-  const reviewCount = listing.reviewCount ?? 0
   const currentScore = report.overallScore as number
 
   if (rating >= 4.8 && reviewCount >= 100 && currentScore < 80) {
