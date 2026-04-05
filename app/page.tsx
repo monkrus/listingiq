@@ -7,6 +7,7 @@ import Report from './components/Report'
 import { APP_VERSION } from './lib/version'
 import PhotoUploadStep from './components/PhotoUploadStep'
 import { PhotoAnalysisResult } from './api/analyze-photos/route'
+import { savePendingPhotos, getPendingPhotos, clearPendingPhotos } from './lib/photo-db'
 
 const LOADING_STEPS = [
   'Connecting to Airbnb...',
@@ -126,7 +127,8 @@ export default function Home() {
     setInitialPhotoPreviews(null)
 
     const plan = planOverride || activePlan
-    const hasPhotos = !!uploadId
+    // Check for photos: either server uploadId or IndexedDB fallback
+    const hasPhotos = !!uploadId || (plan === 'full-audit' && !!(await getPendingPhotos()))
     animateSteps(hasPhotos)
 
     try {
@@ -148,19 +150,57 @@ export default function Home() {
             amenities: data.amenityHaves || [],
             missingPhotos: data.missingPhotos || [],
           }
-          const photoRes = await fetch('/api/analyze-photos', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uploadId, sessionId, listingContext }),
-          })
-          const photoData = await photoRes.json()
-          if (photoRes.ok) {
-            setInitialPhotoResults(photoData)
-            if (photoData.previews) {
-              setInitialPhotoPreviews(photoData.previews)
+
+          let photoRes: Response | null = null
+
+          // Try server-side photo store first (if we have an uploadId)
+          if (uploadId) {
+            photoRes = await fetch('/api/analyze-photos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uploadId, sessionId, listingContext }),
+            })
+          }
+
+          // If server photos expired (410) or no uploadId, fall back to IndexedDB
+          if (!photoRes || (!photoRes.ok && photoRes.status === 410)) {
+            if (!photoRes) console.log('[analyze] No uploadId, trying IndexedDB...')
+            else console.warn('[analyze] Server photos expired, trying IndexedDB fallback...')
+            const savedFiles = await getPendingPhotos()
+            if (savedFiles?.length) {
+              const form = new FormData()
+              savedFiles.forEach(f => form.append('photos', f))
+              form.append('sessionId', sessionId || '')
+              form.append('listingContext', JSON.stringify(listingContext))
+              photoRes = await fetch('/api/analyze-photos', { method: 'POST', body: form })
             }
-          } else {
-            console.warn('[analyze] Photo analysis failed:', photoData.error)
+          }
+
+          if (photoRes) {
+            const photoData = await photoRes.json()
+            if (photoRes.ok) {
+              setInitialPhotoResults(photoData)
+              // Use server previews if available, otherwise generate from IndexedDB
+              if (photoData.previews) {
+                setInitialPhotoPreviews(photoData.previews)
+              } else {
+                const savedFiles = await getPendingPhotos()
+                if (savedFiles?.length) {
+                  const previews = await Promise.all(savedFiles.map(f =>
+                    new Promise<string>(resolve => {
+                      const reader = new FileReader()
+                      reader.onload = () => resolve(reader.result as string)
+                      reader.readAsDataURL(f)
+                    })
+                  ))
+                  setInitialPhotoPreviews(previews)
+                }
+              }
+              // Clean up IndexedDB after successful analysis
+              clearPendingPhotos()
+            } else {
+              console.warn('[analyze] Photo analysis failed:', photoData.error)
+            }
           }
         } catch (photoErr) {
           console.warn('[analyze] Photo analysis error:', photoErr)
@@ -215,6 +255,10 @@ export default function Home() {
   async function handlePhotosContinue(files: File[], _previews: string[]) {
     setPhotoUploading(true)
     try {
+      // Save photos to IndexedDB so they survive the Stripe redirect
+      await savePendingPhotos(files)
+
+      // Also upload to server as primary path
       const form = new FormData()
       files.forEach(f => form.append('photos', f))
       const res = await fetch('/api/upload-photos', { method: 'POST', body: form })

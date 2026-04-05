@@ -281,7 +281,7 @@ Check if the photos support what the listing promises. Flag if key selling point
             ...labeledContents,
             {
               type: 'text',
-              text: `Above are ${files.length} Airbnb listing photos. Each is labeled [Photo N: filename].
+              text: `Above are ${photoCount} Airbnb listing photos. Each is labeled [Photo N: filename].
 
 Evaluate each photo's quality, classify its room type, give a keep/retake verdict, mark the best photos as hero shots, and identify missing shot types.${contextText}`,
             },
