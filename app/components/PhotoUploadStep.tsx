@@ -33,10 +33,11 @@ export default function PhotoUploadStep({ onContinue, uploading }: Props) {
     if (!unique.length) { if (messages.length) setError(messages.join(' ')); return }
 
     const spotsLeft = MAX_PHOTOS - files.length
-    if (spotsLeft <= 0) { setError(`Maximum ${MAX_PHOTOS} photos reached.`); return }
+    if (spotsLeft <= 0) { setError(`Maximum ${MAX_PHOTOS} photos reached. Remove some to add more.`); return }
 
     const toAdd = unique.slice(0, spotsLeft)
-    if (unique.length > spotsLeft) messages.push(`Only ${spotsLeft} spot${spotsLeft > 1 ? 's' : ''} left.`)
+    const skipped = unique.length - toAdd.length
+    if (skipped > 0) messages.push(`${skipped} photo${skipped > 1 ? 's' : ''} skipped — maximum ${MAX_PHOTOS} photos.`)
 
     setError(messages.length ? messages.join(' ') : '')
     setFiles(prev => [...prev, ...toAdd])
@@ -139,7 +140,7 @@ export default function PhotoUploadStep({ onContinue, uploading }: Props) {
         style={{ fontFamily: 'var(--font-syne)' }}
         className="w-full py-3 bg-stone-900 text-white text-sm font-bold rounded-xl hover:bg-stone-700 disabled:opacity-40 transition-colors tracking-wide mt-3"
       >
-        {uploading ? 'Uploading photos...' : `Continue to payment with ${files.length || ''} photo${files.length !== 1 ? 's' : ''}`}
+        {uploading ? 'Uploading photos...' : 'Continue to payment'}
       </button>
     </div>
   )
