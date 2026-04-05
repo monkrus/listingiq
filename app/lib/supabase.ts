@@ -130,6 +130,62 @@ export async function saveReport(
   return data.id
 }
 
+/** Save a report to Supabase keyed by Stripe session ID (for email re-access) */
+export async function cacheReport(sessionId: string, plan: string, listingUrl: string, reportData: object, photoResults?: object | null, photoPreviews?: string[] | null): Promise<boolean> {
+  const db = getSupabaseAdmin()
+  if (!db) { console.warn('[db] Supabase not configured, skipping cacheReport'); return false }
+  const { error } = await db
+    .from('cached_reports')
+    .upsert({
+      session_id: sessionId,
+      plan,
+      listing_url: listingUrl,
+      report_data: reportData,
+      photo_results: photoResults || null,
+      photo_previews: photoPreviews || null,
+    })
+  if (error) { console.error('[db] cacheReport:', error); return false }
+  console.log(`[db] Cached report for session ${sessionId}`)
+  return true
+}
+
+/** Load a cached report by Stripe session ID */
+export async function getCachedReportBySession(sessionId: string): Promise<{
+  plan: string
+  listingUrl: string
+  reportData: Record<string, unknown>
+  photoResults: Record<string, unknown> | null
+  photoPreviews: string[] | null
+} | null> {
+  const db = getSupabaseAdmin()
+  if (!db) return null
+  const { data, error } = await db
+    .from('cached_reports')
+    .select('*')
+    .eq('session_id', sessionId)
+    .single()
+  if (error || !data) return null
+  return {
+    plan: data.plan,
+    listingUrl: data.listing_url,
+    reportData: data.report_data,
+    photoResults: data.photo_results,
+    photoPreviews: data.photo_previews,
+  }
+}
+
+/** Update cached report with photo results (added after initial report) */
+export async function updateCachedPhotos(sessionId: string, photoResults: object, photoPreviews?: string[] | null): Promise<boolean> {
+  const db = getSupabaseAdmin()
+  if (!db) return false
+  const { error } = await db
+    .from('cached_reports')
+    .update({ photo_results: photoResults, photo_previews: photoPreviews || null })
+    .eq('session_id', sessionId)
+  if (error) { console.error('[db] updateCachedPhotos:', error); return false }
+  return true
+}
+
 export async function getReportsThisMonth(userId: string): Promise<number> {
   const db = getSupabaseAdmin()
   if (!db) return 0

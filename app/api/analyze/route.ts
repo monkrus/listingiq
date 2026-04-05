@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { ListingInput } from '@/app/lib/types'
 import { scrapeAirbnbListing, isValidAirbnbUrl } from '@/app/lib/scraper'
-import { saveReport } from '@/app/lib/supabase'
+import { saveReport, cacheReport, getCachedReportBySession } from '@/app/lib/supabase'
 import { verifyPayment } from '@/app/lib/verify-payment'
 import { rateLimit } from '@/app/lib/rate-limit'
 import { useAnalysisCredit } from '@/app/lib/session-usage'
@@ -344,6 +344,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Re-access: try Supabase cache first (survives deploys, works cross-browser)
+    if (body.reaccess && body.sessionId) {
+      const cached = await getCachedReportBySession(body.sessionId)
+      if (cached) {
+        console.log(`[analyze] Returning Supabase-cached report for session ${body.sessionId}`)
+        return NextResponse.json({
+          ...cached.reportData,
+          cachedPhotoResults: cached.photoResults,
+          cachedPhotoPreviews: cached.photoPreviews,
+        })
+      }
+    }
+
     // Return mock data for demo or when USE_MOCK_API is enabled
     if (isDemo || USE_MOCK) {
       console.log(`[analyze] Using mock response (${isDemo ? 'demo' : 'USE_MOCK_API=true'})`)
@@ -428,6 +441,13 @@ export async function POST(req: NextRequest) {
         report,
         report.overallScore as number
       ).catch(err => console.warn('[analyze] Failed to save report:', err))
+    }
+
+    // Cache report in Supabase for email re-access (fire-and-forget)
+    if (body.sessionId && !body.isDemo) {
+      const fullReport = { ...report, wasScraped, plan }
+      cacheReport(body.sessionId, plan, listingUrl, fullReport)
+        .catch(err => console.warn('[analyze] Failed to cache report:', err))
     }
 
     // Include photo URLs so client can auto-analyze listing photos for Full Audit

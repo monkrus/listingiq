@@ -50,13 +50,15 @@ export default function Home() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
 
-    // Returning from Stripe payment
+    // Returning from Stripe payment or email re-access
     if (params.get('paid') === '1') {
       setIsPaid(true)
       const planParam = params.get('plan')
       if (planParam && ['quick-score', 'full-audit'].includes(planParam)) {
         setActivePlan(planParam)
       }
+      const isCheckout = params.get('checkout') === '1'
+
       // Check for saved report — reuse if same plan (don't show Quick Score for Full Audit)
       const savedPlan = localStorage.getItem('listingiq_plan')
       const saved = localStorage.getItem('listingiq_report')
@@ -67,10 +69,11 @@ export default function Home() {
       const urlParam = params.get('url')
       const photoUploadParam = params.get('photoUploadId')
 
-      // Auto-analyze: works for both fresh Stripe redirect and email re-access
-      // (server-side report cache ensures same results are returned quickly)
-      localStorage.removeItem('listingiq_report')
-      localStorage.removeItem('listingiq_plan')
+      // Fresh checkout: clear stale localStorage. Email re-access: keep existing data.
+      if (isCheckout) {
+        localStorage.removeItem('listingiq_report')
+        localStorage.removeItem('listingiq_plan')
+      }
       const savedUrl = urlParam || localStorage.getItem('listingiq_url')
       if (savedUrl) {
         setUrl(savedUrl)
@@ -78,7 +81,8 @@ export default function Home() {
         if (photoUploadParam) {
           setPhotoUploadId(photoUploadParam)
         }
-        analyze({ url: savedUrl }, photoUploadParam || null, planParam || 'quick-score')
+        // Pass reaccess flag for email re-access so the API allows re-analysis
+        analyze({ url: savedUrl, reaccess: !isCheckout }, photoUploadParam || null, planParam || 'quick-score')
       }
       return
     }
@@ -146,73 +150,79 @@ export default function Home() {
 
       // 2. For Full Audit, run photo analysis
       if (plan === 'full-audit') {
-        try {
-          const listingContext = {
-            title: data.titleSuggestions?.[0] || '',
-            amenities: data.amenityHaves || [],
-            missingPhotos: data.missingPhotos || [],
-          }
-
-          let photoRes: Response | null = null
-
-          // Priority 1: Try server-side photo store (user uploaded before payment)
-          if (uploadId) {
-            photoRes = await fetch('/api/analyze-photos', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ uploadId, sessionId, listingContext }),
-            })
-          }
-
-          // Priority 2: If server photos expired, try IndexedDB
-          if ((!photoRes || (!photoRes.ok && photoRes.status === 410)) && hasUserPhotos) {
-            console.warn('[analyze] Trying IndexedDB fallback...')
-            const savedFiles = await getPendingPhotos()
-            if (savedFiles?.length) {
-              const form = new FormData()
-              savedFiles.forEach(f => form.append('photos', f))
-              form.append('sessionId', sessionId || '')
-              form.append('listingContext', JSON.stringify(listingContext))
-              photoRes = await fetch('/api/analyze-photos', { method: 'POST', body: form })
+        // Check if Supabase cached report already includes photo results
+        if (data.cachedPhotoResults) {
+          setInitialPhotoResults(data.cachedPhotoResults)
+          if (data.cachedPhotoPreviews) setInitialPhotoPreviews(data.cachedPhotoPreviews)
+        } else {
+          try {
+            const listingContext = {
+              title: data.titleSuggestions?.[0] || '',
+              amenities: data.amenityHaves || [],
+              missingPhotos: data.missingPhotos || [],
             }
-          }
 
-          // Priority 3: Auto-analyze listing photos from scraper
-          if (!photoRes && data.photoUrls?.length) {
-            console.log('[analyze] Auto-analyzing listing photos from scraper URLs...')
-            photoRes = await fetch('/api/analyze-photos', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ photoUrls: data.photoUrls, sessionId, listingContext }),
-            })
-          }
+            let photoRes: Response | null = null
 
-          if (photoRes) {
-            const photoData = await photoRes.json()
-            if (photoRes.ok) {
-              setInitialPhotoResults(photoData)
-              if (photoData.previews) {
-                setInitialPhotoPreviews(photoData.previews)
-              } else if (hasUserPhotos) {
-                const savedFiles = await getPendingPhotos()
-                if (savedFiles?.length) {
-                  const previews = await Promise.all(savedFiles.map(f =>
-                    new Promise<string>(resolve => {
-                      const reader = new FileReader()
-                      reader.onload = () => resolve(reader.result as string)
-                      reader.readAsDataURL(f)
-                    })
-                  ))
-                  setInitialPhotoPreviews(previews)
-                }
+            // Priority 1: Try server-side photo store (user uploaded before payment)
+            if (uploadId) {
+              photoRes = await fetch('/api/analyze-photos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uploadId, sessionId, listingContext }),
+              })
+            }
+
+            // Priority 2: If server photos expired, try IndexedDB
+            if ((!photoRes || (!photoRes.ok && photoRes.status === 410)) && hasUserPhotos) {
+              console.warn('[analyze] Trying IndexedDB fallback...')
+              const savedFiles = await getPendingPhotos()
+              if (savedFiles?.length) {
+                const form = new FormData()
+                savedFiles.forEach(f => form.append('photos', f))
+                form.append('sessionId', sessionId || '')
+                form.append('listingContext', JSON.stringify(listingContext))
+                photoRes = await fetch('/api/analyze-photos', { method: 'POST', body: form })
               }
-              clearPendingPhotos()
-            } else {
-              console.warn('[analyze] Photo analysis failed:', photoData.error)
             }
+
+            // Priority 3: Auto-analyze listing photos from scraper
+            if (!photoRes && data.photoUrls?.length) {
+              console.log('[analyze] Auto-analyzing listing photos from scraper URLs...')
+              photoRes = await fetch('/api/analyze-photos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ photoUrls: data.photoUrls, sessionId, listingContext }),
+              })
+            }
+
+            if (photoRes) {
+              const photoData = await photoRes.json()
+              if (photoRes.ok) {
+                setInitialPhotoResults(photoData)
+                if (photoData.previews) {
+                  setInitialPhotoPreviews(photoData.previews)
+                } else if (hasUserPhotos) {
+                  const savedFiles = await getPendingPhotos()
+                  if (savedFiles?.length) {
+                    const previews = await Promise.all(savedFiles.map(f =>
+                      new Promise<string>(resolve => {
+                        const reader = new FileReader()
+                        reader.onload = () => resolve(reader.result as string)
+                        reader.readAsDataURL(f)
+                      })
+                    ))
+                    setInitialPhotoPreviews(previews)
+                  }
+                }
+                clearPendingPhotos()
+              } else {
+                console.warn('[analyze] Photo analysis failed:', photoData.error)
+              }
+            }
+          } catch (photoErr) {
+            console.warn('[analyze] Photo analysis error:', photoErr)
           }
-        } catch (photoErr) {
-          console.warn('[analyze] Photo analysis error:', photoErr)
         }
       }
 
@@ -290,6 +300,7 @@ export default function Home() {
       return
     }
     // Production: redirect to Stripe checkout
+    localStorage.setItem('listingiq_checkout_pending', '1')
     const uploadParam = uploadId ? `&uploadId=${uploadId}` : ''
     window.location.href = `/api/checkout-redirect?plan=${planKey}&url=${encodeURIComponent(url.trim())}${uploadParam}`
   }

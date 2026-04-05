@@ -24,6 +24,11 @@ function SuccessContent() {
       return
     }
 
+    // Detect fresh checkout vs email re-access: if we set a pending flag before
+    // going to Stripe, this is a fresh checkout. Otherwise it's email re-access.
+    const isCheckout = localStorage.getItem('listingiq_checkout_pending') === '1'
+    localStorage.removeItem('listingiq_checkout_pending')
+
     fetch(`/api/verify-session?session_id=${sessionId}`)
       .then(res => res.json())
       .then(data => {
@@ -31,7 +36,8 @@ function SuccessContent() {
           localStorage.setItem('listingiq_session_id', sessionId!)
           const urlParam = data.listingUrl ? `&url=${encodeURIComponent(data.listingUrl)}` : ''
           const photoParam = data.photoUploadId ? `&photoUploadId=${data.photoUploadId}` : ''
-          router.replace(`/?paid=1&plan=${data.plan || plan}${urlParam}${photoParam}&checkout=1`)
+          const checkoutParam = isCheckout ? '&checkout=1' : ''
+          router.replace(`/?paid=1&plan=${data.plan || plan}${urlParam}${photoParam}${checkoutParam}`)
         } else {
           setError(data.error || 'Payment could not be verified.')
         }

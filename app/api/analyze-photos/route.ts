@@ -5,6 +5,7 @@ import { rateLimit } from '@/app/lib/rate-limit'
 import { usePhotoCredit } from '@/app/lib/session-usage'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { getPhotos, deletePhotos, StoredPhoto } from '@/app/lib/photo-store'
+import { updateCachedPhotos } from '@/app/lib/supabase'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -397,16 +398,22 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
     if (uploadId) deletePhotos(uploadId)
 
     // Include previews so client can display photo thumbnails
+    let responseData: Record<string, unknown> = { ...result }
     if (photoUrls.length) {
-      // Use the CDN URLs directly as previews
-      return NextResponse.json({ ...result, previews: photoUrls.slice(0, filenames.length) })
-    }
-    if (storedPhotos) {
+      responseData = { ...result, previews: photoUrls.slice(0, filenames.length) }
+    } else if (storedPhotos) {
       const previews = storedPhotos.map(p => `data:${p.mediaType};base64,${p.base64}`)
-      return NextResponse.json({ ...result, previews })
+      responseData = { ...result, previews }
     }
 
-    return NextResponse.json(result)
+    // Cache photo results in Supabase for email re-access (fire-and-forget)
+    if (sessionId) {
+      const previews = (responseData.previews as string[]) || null
+      updateCachedPhotos(sessionId, result, previews)
+        .catch(err => console.warn('[photo-analyze] Failed to cache photos:', err))
+    }
+
+    return NextResponse.json(responseData)
   } catch (err) {
     console.error('[photo-analyze]', err)
     return NextResponse.json({ error: 'Photo analysis failed' }, { status: 500 })
