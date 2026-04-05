@@ -355,7 +355,12 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
 
       {/* Real photo upload — Full Audit paid users */}
       {hasPhotoAnalysis && !isDemo && (
-        <div className="mb-4">
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-stone-800 uppercase tracking-wide flex items-center gap-2">
+              <span className="text-lg">📸</span> AI Photo Analysis
+            </h3>
+          </div>
           <PhotoUploader
             listingContext={{
               title: d.summary,
@@ -370,6 +375,7 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
           />
         </div>
       )}
+
 
       {/* Amenities */}
       <ReportSection title="Amenity strength" score={d.amenityScore}>
