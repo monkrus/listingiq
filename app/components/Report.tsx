@@ -3,11 +3,20 @@ import { useState } from 'react'
 import { ReportData } from '@/app/lib/types'
 import { PhotoAnalysisResult } from '@/app/api/analyze-photos/route'
 import ScoreCircle from './ScoreCircle'
+import { APP_VERSION } from '@/app/lib/version'
 import ReportSection from './ReportSection'
 import DownloadPdfButton from './DownloadPdfButton'
 import PhotoUploader from './PhotoUploader'
 
-interface Props { data: ReportData; onReset: () => void; plan?: string; isDemo?: boolean; listingUrl?: string }
+interface Props {
+  data: ReportData
+  onReset: () => void
+  plan?: string
+  isDemo?: boolean
+  listingUrl?: string
+  initialPhotoResults?: PhotoAnalysisResult | null
+  initialPhotoPreviews?: string[] | null
+}
 
 function buildTextReport(d: ReportData, listingUrl?: string): string {
   const divider = '─'.repeat(40)
@@ -142,7 +151,7 @@ function scoreColor(s: number) {
   return s >= 80 ? '#4a7c2f' : s >= 60 ? '#b45309' : '#b91c1c'
 }
 
-export default function Report({ data: d, onReset, plan = 'quick-score', isDemo = false, listingUrl = '' }: Props) {
+export default function Report({ data: d, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null }: Props) {
   const [photoResults, setPhotoResults] = useState<PhotoAnalysisResult | null>(null)
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
   const [selectedPkg, setSelectedPkg] = useState<string | null>('Premium')
@@ -180,14 +189,17 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
   return (
     <div className="max-w-2xl mx-auto px-4 pb-20">
 
-      {/* Plan badge */}
-      {plan && (
-        <div className="mb-4 text-center">
+      {/* Analyze another + Plan badge */}
+      <div className="mb-4 flex items-center justify-center relative">
+        <button onClick={onReset} className="absolute left-0 text-sm text-stone-500 hover:text-stone-700 underline">
+          ← Analyze another listing
+        </button>
+        {plan && (
           <span style={{ fontFamily: 'var(--font-syne)' }} className="inline-block bg-stone-900 text-white text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full">
             {plan === 'quick-score' ? 'Quick Score' : 'Full Audit'}{isDemo ? ' · Demo' : ''}
           </span>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Listing URL + scrape status */}
       {!isDemo && listingUrl && (
@@ -348,6 +360,8 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
             }}
             onResults={setPhotoResults}
             onPreviews={setPhotoPreviews}
+            initialResults={initialPhotoResults}
+            initialPreviews={initialPhotoPreviews}
           />
         </div>
       )}
@@ -555,12 +569,6 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
         </p>
       </div>
 
-      {/* Analyze another */}
-      <div className="text-center mt-6">
-        <button onClick={onReset} className="text-sm text-stone-600 hover:text-stone-600 underline">
-          ← Analyze another listing
-        </button>
-      </div>
 
       {/* Disclosure */}
       <div className="text-[11px] text-stone-600 text-center mt-6 leading-relaxed max-w-md mx-auto space-y-2 font-bold">
@@ -568,8 +576,9 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
           This report analyses your listing&apos;s text, title, photos, and presentation. Pricing strategy, calendar management, minimum-stay rules, and demand-based adjustments are outside this tool&apos;s scope but significantly impact performance.
         </p>
         <p>
-          Results are AI-generated and may not be fully accurate. Use them as guidance alongside your own judgement. ListingIQ is not affiliated with Airbnb.
+          Results are AI-generated, may not be fully accurate, and can vary between runs for the same listing. This is not financial advice. Use results as guidance alongside your own judgement. ListingIQ is not affiliated with Airbnb.
         </p>
+        <p className="text-stone-400 mt-2">v{APP_VERSION}</p>
       </div>
     </div>
   )

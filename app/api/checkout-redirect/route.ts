@@ -4,6 +4,7 @@ import { stripe, PLANS } from '@/app/lib/stripe'
 export async function GET(req: NextRequest) {
   const plan = req.nextUrl.searchParams.get('plan') || 'quick-score'
   const listingUrl = req.nextUrl.searchParams.get('url') || ''
+  const uploadId = req.nextUrl.searchParams.get('uploadId') || ''
   const upgrade = req.nextUrl.searchParams.get('upgrade') === '1'
   // Never use client-provided Origin header — hardcode the base URL
   const origin = process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
       line_items: [{ price: planConfig.priceId, quantity: 1 }],
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}&plan=${plan}`,
       cancel_url: `${origin}${listingUrl ? `/?url=${encodeURIComponent(listingUrl)}` : '/pricing'}`,
-      metadata: { planKey: plan, listingUrl },
+      metadata: { planKey: plan, listingUrl, ...(uploadId ? { photoUploadId: uploadId } : {}) },
       allow_promotion_codes: true,
     })
 

@@ -7,6 +7,7 @@ import { verifyPayment } from '@/app/lib/verify-payment'
 import { rateLimit } from '@/app/lib/rate-limit'
 import { useAnalysisCredit } from '@/app/lib/session-usage'
 import { checkOrigin } from '@/app/lib/check-origin'
+import { getCachedReport, setCachedReport } from '@/app/lib/report-cache'
 
 const USE_MOCK = process.env.USE_MOCK_API === 'true'
 
@@ -378,10 +379,19 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Check cache — return identical result for same listing + plan within 24h
+    const listingUrl = body.url || ''
+    if (!body.isDemo && listingUrl) {
+      const cached = getCachedReport(listingUrl, plan)
+      if (cached) {
+        return NextResponse.json(cached)
+      }
+    }
+
     let report
     try {
       const message = await client.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: (process.env.CLAUDE_MODEL as string) || 'claude-sonnet-4-6',
         max_tokens: 3000,
         temperature: 0,
         system: SYSTEM,
@@ -403,6 +413,11 @@ export async function POST(req: NextRequest) {
     // Post-processing: catch and fix AI errors before sending to client
     report = validateReport(report, listing)
     report.estimatedImprovement = estimateImprovement(report.overallScore as number)
+
+    // Cache the validated report
+    if (!body.isDemo && listingUrl) {
+      setCachedReport(listingUrl, plan, report)
+    }
 
     // Save to Supabase if user is authenticated
     if (body.userId) {

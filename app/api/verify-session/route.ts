@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
         verified: true,
         plan: session.metadata?.planKey || 'quick-score',
         listingUrl: session.metadata?.listingUrl || '',
+        photoUploadId: session.metadata?.photoUploadId || '',
       })
     }
 

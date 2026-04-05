@@ -108,12 +108,13 @@ const PHOTO_LOADING_STEPS = [
   'Compiling photo report...',
 ]
 
-export default function PhotoUploader({ listingContext, onResults, onPreviews }: { listingContext?: ListingContext; onResults?: (r: PhotoAnalysisResult | null) => void; onPreviews?: (p: string[]) => void } = {}) {
-  const [previews, setPreviews] = useState<string[]>([])
+export default function PhotoUploader({ listingContext, onResults, onPreviews, initialResults, initialPreviews }: { listingContext?: ListingContext; onResults?: (r: PhotoAnalysisResult | null) => void; onPreviews?: (p: string[]) => void; initialResults?: PhotoAnalysisResult | null; initialPreviews?: string[] | null } = {}) {
+  const hasInitial = !!(initialResults && initialPreviews?.length)
+  const [previews, setPreviews] = useState<string[]>(hasInitial ? initialPreviews! : [])
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState<Step>('upload')
-  const [result, setResult] = useState<PhotoAnalysisResult | null>(null)
+  const [step, setStep] = useState<Step>(hasInitial ? 'results' : 'upload')
+  const [result, setResult] = useState<PhotoAnalysisResult | null>(hasInitial ? initialResults! : null)
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [loadingStepIndex, setLoadingStepIndex] = useState(-1)
@@ -436,7 +437,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews }:
               <PhotoCard
                 key={i}
                 photo={photo}
-                preview={previews[i]}
+                preview={previews[photo.index] || previews[i]}
               />
             ))}
           </div>

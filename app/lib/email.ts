@@ -4,7 +4,7 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'ListingIQ <noreply@listingiq.pro>'
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'ListingIQ <hello@listingiq.pro>'
 
 /**
  * Send a receipt/confirmation email after purchase.
@@ -29,8 +29,10 @@ export async function sendReceiptEmail(opts: {
   try {
     await resend.emails.send({
       from: FROM_EMAIL,
+      replyTo: 'support@listingiq.pro',
       to: opts.to,
       subject: `Your ListingIQ ${planName} report is ready`,
+      text: `Your ListingIQ ${planName} Report is Ready\n\nThanks for your purchase! Your ${planName} (${planPrice}) analysis is complete.\n\nView your report: ${reportUrl}\n\nImportant: Download the PDF or copy the report text. Reports are generated on-demand and not stored permanently.\n\n© ${new Date().getFullYear()} ListingIQ`,
       html: `
 <!DOCTYPE html>
 <html>

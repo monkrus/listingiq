@@ -4,6 +4,7 @@ import { verifyPayment } from '@/app/lib/verify-payment'
 import { rateLimit } from '@/app/lib/rate-limit'
 import { usePhotoCredit } from '@/app/lib/session-usage'
 import { checkOrigin } from '@/app/lib/check-origin'
+import { getPhotos, deletePhotos, StoredPhoto } from '@/app/lib/photo-store'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -29,11 +30,13 @@ export interface PhotoAnalysisResult {
 
 const PHOTO_SYSTEM = `You are an expert Airbnb photography consultant. Analyze each photo in the context of the listing it belongs to — consider what the listing promises and whether the photos deliver on that promise.
 
+IMPORTANT: Photos are labeled with 1-based numbers: [Photo 1], [Photo 2], etc. Use the SAME 1-based numbering in your response — "index": 1 for Photo 1, "index": 2 for Photo 2, etc.
+
 Return ONLY valid JSON — no markdown, no backticks:
 {
   "photos": [
     {
-      "index": 0,
+      "index": 1,
       "filename": "photo name",
       "verdict": "keep" | "retake",
       "score": <0-100>,
@@ -47,7 +50,7 @@ Return ONLY valid JSON — no markdown, no backticks:
   "overallPhotoScore": <0-100>,
   "missingShots": ["shot type missing — explain why this matters for the listing"] — maximum 5, ranked by impact,
   "heroSuggestion": "Which photo should be #1 and why — tie it to the listing's key selling points",
-  "suggestedOrder": [3, 0, 5, 1, 2, ...] — recommended gallery order as photo indices (0-based) for ALL uploaded photos, best photos first. Include every photo — both "keep" and "retake" — so the host sees the full optimal sequence. Place stronger photos earlier and weaker ones later.
+  "suggestedOrder": [3, 1, 5, 2, 4, ...] — recommended gallery order as photo numbers (1-based) for ALL uploaded photos, best photos first. Include every photo — both "keep" and "retake" — so the host sees the full optimal sequence. Place stronger photos earlier and weaker ones later.
 }
 
 HERO SHOTS:
@@ -78,6 +81,13 @@ When listing context is provided, use it to:
 - Flag missing photos for amenities the listing highlights
 - Prioritize photos that showcase the listing's unique differentiators
 - Note if any photos contradict or undermine what the description promises
+
+CRITICAL RULES:
+1. Return photos in the EXACT same order they were provided (Photo 1, Photo 2, Photo 3...). The "index" field MUST match the "[Photo N: ...]" label from the input. Use 1-based numbering.
+2. You MUST return exactly one entry per photo — no skipping, no duplicating.
+3. Describe what you ACTUALLY see in each photo — do not guess or hallucinate details. If you cannot identify a room type, use "other".
+4. Each photo's strengths and problems must reference specific visual elements you can see in THAT photo, not generic advice.
+5. When referencing photos by number in heroSuggestion or missingShots text, use the SAME 1-based numbers (Photo 1, Photo 2, etc.) matching the card labels the user sees.
 
 Focus on which photo should be the cover image (first photo guests see in search results) and give each photo a clear keep/retake verdict.`
 
@@ -133,44 +143,69 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
     }
 
-    const formData = await req.formData()
-    const files = formData.getAll('photos') as File[]
+    // Two input modes: FormData (direct upload) or JSON with uploadId (pre-payment)
+    const contentType = req.headers.get('content-type') || ''
+    let storedPhotos: StoredPhoto[] | null = null
+    let files: File[] = []
+    let sessionId: string | null = null
+    let listingContextRaw: string | null = null
+    let uploadId: string | null = null
 
-    if (!files.length) {
-      return NextResponse.json({ error: 'No photos provided' }, { status: 400 })
-    }
+    if (contentType.includes('application/json')) {
+      // Mode B: uploadId from pre-payment photo store
+      const body = await req.json()
+      uploadId = body.uploadId
+      sessionId = body.sessionId
+      listingContextRaw = body.listingContext ? JSON.stringify(body.listingContext) : null
 
-    if (files.length > 10) {
-      return NextResponse.json({ error: 'Maximum 10 photos at once' }, { status: 400 })
-    }
-
-    // Server-side file validation — don't trust client-side checks
-    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-    const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4 MB per file (keeps memory under ~55MB for 10 photos)
-    const MAX_TOTAL_SIZE = 20 * 1024 * 1024 // 20 MB total
-    let totalSize = 0
-    for (const file of files) {
-      if (!ALLOWED_TYPES.includes(file.type)) {
-        return NextResponse.json({ error: `Invalid file type: ${file.type}. Allowed: JPG, PNG, WebP` }, { status: 400 })
+      if (!uploadId) {
+        return NextResponse.json({ error: 'Missing uploadId' }, { status: 400 })
       }
-      if (file.size > MAX_FILE_SIZE) {
-        return NextResponse.json({ error: `${file.name} is too large (max 4 MB per photo). Please resize before uploading.` }, { status: 400 })
+      storedPhotos = getPhotos(uploadId)
+      if (!storedPhotos) {
+        return NextResponse.json({ error: 'Photos expired or not found. Please upload your photos again on the report page.' }, { status: 410 })
       }
-      totalSize += file.size
+    } else {
+      // Mode A: FormData file upload (existing flow)
+      const formData = await req.formData()
+      files = formData.getAll('photos') as File[]
+      sessionId = formData.get('sessionId') as string | null
+      listingContextRaw = formData.get('listingContext') as string | null
+
+      if (!files.length) {
+        return NextResponse.json({ error: 'No photos provided' }, { status: 400 })
+      }
+      if (files.length > 10) {
+        return NextResponse.json({ error: 'Maximum 10 photos at once' }, { status: 400 })
+      }
+
+      const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+      const MAX_FILE_SIZE = 4 * 1024 * 1024
+      const MAX_TOTAL_SIZE = 20 * 1024 * 1024
+      let totalSize = 0
+      for (const file of files) {
+        if (!ALLOWED_TYPES.includes(file.type)) {
+          return NextResponse.json({ error: `Invalid file type: ${file.type}. Allowed: JPG, PNG, WebP` }, { status: 400 })
+        }
+        if (file.size > MAX_FILE_SIZE) {
+          return NextResponse.json({ error: `${file.name} is too large (max 4 MB per photo). Please resize before uploading.` }, { status: 400 })
+        }
+        totalSize += file.size
+      }
+      if (totalSize > MAX_TOTAL_SIZE) {
+        return NextResponse.json({ error: `Total upload size exceeds 20 MB. Please reduce photo sizes or upload fewer photos.` }, { status: 400 })
+      }
     }
-    if (totalSize > MAX_TOTAL_SIZE) {
-      return NextResponse.json({ error: `Total upload size exceeds 20 MB. Please reduce photo sizes or upload fewer photos.` }, { status: 400 })
-    }
+
+    const photoCount = storedPhotos ? storedPhotos.length : files.length
 
     // Verify payment for non-mock requests
     const isDev = process.env.NODE_ENV === 'development'
     if (!USE_MOCK && !isDev) {
-      const sessionId = formData.get('sessionId') as string | null
       const payment = await verifyPayment(sessionId)
       if (!payment.valid) {
         return NextResponse.json({ error: payment.error || 'Payment required' }, { status: 403 })
       }
-      // Check session usage limits
       const credit = await usePhotoCredit(sessionId!, payment.plan)
       if (!credit.allowed) {
         return NextResponse.json({ error: credit.error }, { status: 403 })
@@ -180,38 +215,48 @@ export async function POST(req: NextRequest) {
     // Return mock data when USE_MOCK_API is enabled
     if (USE_MOCK) {
       console.log('[photo-analyze] Using mock response (USE_MOCK_API=true)')
-      const filenames = files.map(f => f.name)
+      const filenames = storedPhotos
+        ? storedPhotos.map(p => p.filename)
+        : files.map(f => f.name)
+      if (uploadId) deletePhotos(uploadId)
       return NextResponse.json(buildMockResult(filenames))
     }
 
-    // Convert files to base64
+    // Build labeled contents for AI analysis
     const labeledContents: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
     const filenames: string[] = []
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      const bytes = await file.arrayBuffer()
-      const base64 = Buffer.from(bytes).toString('base64')
-      const mediaType = (file.type || 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
-
-      labeledContents.push({
-        type: 'text',
-        text: `[Photo ${i}: ${file.name}]`,
-      })
-      labeledContents.push({
-        type: 'image',
-        source: { type: 'base64', media_type: mediaType, data: base64 },
-      })
-      filenames.push(file.name)
+    if (storedPhotos) {
+      // From pre-payment upload store
+      for (let i = 0; i < storedPhotos.length; i++) {
+        const p = storedPhotos[i]
+        labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${p.filename}]` })
+        labeledContents.push({
+          type: 'image',
+          source: { type: 'base64', media_type: p.mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif', data: p.base64 },
+        })
+        filenames.push(p.filename)
+      }
+    } else {
+      // From direct file upload
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const bytes = await file.arrayBuffer()
+        const base64 = Buffer.from(bytes).toString('base64')
+        const mediaType = (file.type || 'image/jpeg') as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+        labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${file.name}]` })
+        labeledContents.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } })
+        filenames.push(file.name)
+      }
     }
 
-    console.log(`[photo-analyze] Analyzing ${files.length} photos...`)
+    console.log(`[photo-analyze] Analyzing ${photoCount} photos...`)
 
     let result: PhotoAnalysisResult
 
     try {
       // Parse listing context if provided
-      const contextRaw = formData.get('listingContext')
+      const contextRaw = listingContextRaw
       let contextText = ''
       if (contextRaw) {
         try {
@@ -226,7 +271,7 @@ Check if the photos support what the listing promises. Flag if key selling point
       }
 
       const analyzeMessage = await client.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: (process.env.CLAUDE_MODEL as string) || 'claude-sonnet-4-6',
         max_tokens: 4000,
         temperature: 0,
         system: PHOTO_SYSTEM,
@@ -252,14 +297,80 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
 
       result = JSON.parse(raw)
 
-      // Patch filenames
+      // AI returns 1-based indices — convert to 0-based for internal use
+      // and sort by index so display order matches upload order
+      result.photos = result.photos
+        .map(p => ({
+          ...p,
+          index: typeof p.index === 'number' ? p.index - 1 : 0, // 1-based → 0-based
+        }))
+        .sort((a, b) => a.index - b.index)
+
+      // Patch filenames using the converted 0-based index
+      result.photos = result.photos.map(p => ({
+        ...p,
+        filename: filenames[p.index] || p.filename,
+      }))
+
+      // Convert suggestedOrder from 1-based to 0-based
+      if (result.suggestedOrder) {
+        result.suggestedOrder = result.suggestedOrder.map(i => i - 1)
+      }
+
+      // Validate: ensure we have the right number of photos with correct indices
+      if (result.photos.length !== photoCount) {
+        console.warn(`[photo-analyze] Expected ${photoCount} photos, got ${result.photos.length}`)
+      }
+      // Fix any out-of-range indices (safety net)
       result.photos = result.photos.map((p, i) => ({
         ...p,
+        index: i,
         filename: filenames[i] || p.filename,
       }))
+
+      // --- Server-side photo score validation ---
+      // 1. Clamp overall score to within ±10 of individual score average
+      const avgScore = Math.round(result.photos.reduce((sum, p) => sum + p.score, 0) / result.photos.length)
+      if (Math.abs(result.overallPhotoScore - avgScore) > 10) {
+        console.warn(`[photo-analyze] Overall score ${result.overallPhotoScore} too far from avg ${avgScore}, clamping`)
+        result.overallPhotoScore = Math.max(0, Math.min(100, avgScore + Math.sign(result.overallPhotoScore - avgScore) * 10))
+      }
+
+      // 2. Ensure verdict matches score: keep should be ≥55, retake should be <75
+      result.photos = result.photos.map(p => {
+        if (p.verdict === 'keep' && p.score < 55) {
+          return { ...p, verdict: 'retake' as const, heroWorthy: false }
+        }
+        if (p.verdict === 'retake' && p.score >= 75) {
+          return { ...p, verdict: 'keep' as const }
+        }
+        return p
+      })
+
+      // 3. Hero-worthy photos must be 'keep' verdict
+      result.photos = result.photos.map(p => {
+        if (p.heroWorthy && p.verdict !== 'keep') {
+          return { ...p, heroWorthy: false }
+        }
+        return p
+      })
+
+      // 4. Ensure suggestedOrder includes all photos
+      if (!result.suggestedOrder || result.suggestedOrder.length !== photoCount) {
+        result.suggestedOrder = [...result.photos].sort((a, b) => b.score - a.score).map(p => p.index)
+      }
     } catch (apiErr) {
       console.error('[photo-analyze] API call failed:', apiErr instanceof Error ? apiErr.message : apiErr)
       return NextResponse.json({ error: 'Photo analysis failed. Please try again.' }, { status: 502 })
+    }
+
+    // Clean up stored photos after successful analysis
+    if (uploadId) deletePhotos(uploadId)
+
+    // Include base64 previews when photos came from the store (client lost them after Stripe redirect)
+    if (storedPhotos) {
+      const previews = storedPhotos.map(p => `data:${p.mediaType};base64,${p.base64}`)
+      return NextResponse.json({ ...result, previews })
     }
 
     return NextResponse.json(result)

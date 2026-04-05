@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "NEXT_PUBLIC_APP_VERSION=1.0.$(git rev-list --count HEAD 2>/dev/null || echo 0) next build",
     "start": "next start",
-    "playwright:install": "npx playwright install chromium --with-deps"
+    "playwright:install": "npx playwright install chromium --with-deps",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
@@ -24,9 +26,11 @@
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
+    "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10",
     "postcss": "^8",
     "tailwindcss": "^3.4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.2"
   }
 }

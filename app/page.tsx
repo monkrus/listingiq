@@ -4,6 +4,9 @@ import { ReportData, ListingInput } from './lib/types'
 import { isValidAirbnbUrl } from './lib/validation'
 import { DEMO_LISTING } from './lib/demo'
 import Report from './components/Report'
+import { APP_VERSION } from './lib/version'
+import PhotoUploadStep from './components/PhotoUploadStep'
+import { PhotoAnalysisResult } from './api/analyze-photos/route'
 
 const LOADING_STEPS = [
   'Connecting to Airbnb...',
@@ -18,7 +21,14 @@ const LOADING_STEPS = [
   'Compiling your report...',
 ]
 
-type Step = 'input' | 'plan' | 'loading' | 'report'
+const LOADING_STEPS_WITH_PHOTOS = [
+  ...LOADING_STEPS,
+  'Analyzing your listing photos...',
+  'Scoring each photo...',
+  'Generating photo report...',
+]
+
+type Step = 'input' | 'plan' | 'photos' | 'loading' | 'report'
 
 export default function Home() {
   const [url, setUrl] = useState('')
@@ -31,6 +41,10 @@ export default function Home() {
   const [isDemo, setIsDemo] = useState(false)
   const [step, setStep] = useState<Step>('input')
   const [selectedPlan, setSelectedPlan] = useState<string>('full-audit')
+  const [photoUploadId, setPhotoUploadId] = useState<string | null>(null)
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [initialPhotoResults, setInitialPhotoResults] = useState<PhotoAnalysisResult | null>(null)
+  const [initialPhotoPreviews, setInitialPhotoPreviews] = useState<string[] | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -42,24 +56,35 @@ export default function Home() {
       if (planParam && ['quick-score', 'full-audit'].includes(planParam)) {
         setActivePlan(planParam)
       }
-      // Check for saved report — only reuse if same plan (don't show Quick Score for Full Audit)
+      // Check for saved report — reuse if same plan (don't show Quick Score for Full Audit)
       const savedPlan = localStorage.getItem('listingiq_plan')
       const saved = localStorage.getItem('listingiq_report')
       if (saved && savedPlan === planParam) {
         try { setReport(JSON.parse(saved)); return } catch {}
       }
-      // Clear old report if upgrading to a different plan
+
+      const urlParam = params.get('url')
+      const isEmailLink = !!urlParam
+      const photoUploadParam = params.get('photoUploadId')
+
+      // Email re-access: don't auto-regenerate, let user click Analyze
+      if (isEmailLink) {
+        setUrl(urlParam)
+        localStorage.setItem('listingiq_url', urlParam)
+        return
+      }
+
+      // Direct Stripe redirect (first visit after payment): auto-analyze
       localStorage.removeItem('listingiq_report')
       localStorage.removeItem('listingiq_plan')
-      // Run analysis with URL from query param (email link) or localStorage (direct flow)
-      const urlParam = params.get('url')
-      const savedUrl = urlParam || localStorage.getItem('listingiq_url')
+      const savedUrl = localStorage.getItem('listingiq_url')
       if (savedUrl) {
         setUrl(savedUrl)
-        analyze({ url: savedUrl, reaccess: !!urlParam })
+        if (photoUploadParam) {
+          setPhotoUploadId(photoUploadParam)
+        }
+        analyze({ url: savedUrl }, photoUploadParam || null, planParam || 'quick-score')
       }
-      // If no saved URL (e.g. came from /pricing), user stays on input step
-      // with isPaid=true so handleSubmit will skip plan selection
       return
     }
 
@@ -69,7 +94,7 @@ export default function Home() {
       setActivePlan(demoPlan)
       setIsPaid(true)
       setIsDemo(true)
-      analyze(DEMO_LISTING)
+      analyze(DEMO_LISTING, null, demoPlan)
       return
     }
 
@@ -90,36 +115,69 @@ export default function Home() {
     if (urlParam) setUrl(urlParam)
   }, [])
 
-  async function animateSteps() {
-    for (let i = 0; i < LOADING_STEPS.length; i++) {
+  async function animateSteps(withPhotos: boolean) {
+    const steps = withPhotos ? LOADING_STEPS_WITH_PHOTOS : LOADING_STEPS
+    for (let i = 0; i < steps.length; i++) {
       setStepIndex(i)
       await new Promise(r => setTimeout(r, i < 3 ? 3000 : 7000))
     }
   }
 
-  async function analyze(payload: ListingInput & { reaccess?: boolean }) {
+  async function analyze(payload: ListingInput & { reaccess?: boolean }, uploadId?: string | null, planOverride?: string) {
     setError('')
     setLoading(true)
     setStep('loading')
     setReport(null)
-    animateSteps()
+    setInitialPhotoResults(null)
+    setInitialPhotoPreviews(null)
+
+    const plan = planOverride || activePlan
+    const hasPhotos = !!uploadId
+    animateSteps(hasPhotos)
 
     try {
+      // 1. Run text analysis
       const sessionId = localStorage.getItem('listingiq_session_id')
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, sessionId, plan: activePlan }),
+        body: JSON.stringify({ ...payload, sessionId, plan }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Analysis failed')
 
+      // 2. If photos were pre-uploaded, run photo analysis
+      if (hasPhotos && plan === 'full-audit') {
+        try {
+          const listingContext = {
+            title: data.titleSuggestions?.[0] || '',
+            amenities: data.amenityHaves || [],
+            missingPhotos: data.missingPhotos || [],
+          }
+          const photoRes = await fetch('/api/analyze-photos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uploadId, sessionId, listingContext }),
+          })
+          const photoData = await photoRes.json()
+          if (photoRes.ok) {
+            setInitialPhotoResults(photoData)
+            if (photoData.previews) {
+              setInitialPhotoPreviews(photoData.previews)
+            }
+          } else {
+            console.warn('[analyze] Photo analysis failed:', photoData.error)
+          }
+        } catch (photoErr) {
+          console.warn('[analyze] Photo analysis error:', photoErr)
+        }
+      }
+
       setReport(data)
       setStep('report')
-      // Only persist paid reports — demo reports should not restore on page reload
       if (!isDemo) {
         localStorage.setItem('listingiq_report', JSON.stringify(data))
-        localStorage.setItem('listingiq_plan', activePlan)
+        localStorage.setItem('listingiq_plan', plan)
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
@@ -138,7 +196,6 @@ export default function Home() {
       return
     }
     localStorage.setItem('listingiq_url', trimmed)
-    // Already paid (e.g. came from /pricing) — skip plan selection
     if (isPaid) {
       analyze({ url: trimmed })
       return
@@ -147,23 +204,54 @@ export default function Home() {
   }
 
   function handlePlanSelect(planKey: string) {
+    setSelectedPlan(planKey)
     setActivePlan(planKey)
     localStorage.setItem('listingiq_url', url.trim())
+
+    // Full Audit: show photo upload step first
+    if (planKey === 'full-audit') {
+      setStep('photos')
+      return
+    }
+
+    // Quick Score: go straight to payment
+    goToPayment(planKey)
+  }
+
+  async function handlePhotosContinue(files: File[], _previews: string[]) {
+    setPhotoUploading(true)
+    try {
+      const form = new FormData()
+      files.forEach(f => form.append('photos', f))
+      const res = await fetch('/api/upload-photos', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
+      setPhotoUploadId(data.uploadId)
+      goToPayment('full-audit', data.uploadId)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Photo upload failed')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
+  function goToPayment(planKey: string, uploadId?: string) {
     // In mock mode, skip payment and go straight to analysis
     if (process.env.NEXT_PUBLIC_USE_MOCK_API === 'true') {
       setIsPaid(true)
-      analyze({ url: url.trim() })
+      analyze({ url: url.trim() }, uploadId, planKey)
       return
     }
     // Production: redirect to Stripe checkout
-    window.location.href = `/api/checkout-redirect?plan=${planKey}&url=${encodeURIComponent(url.trim())}`
+    const uploadParam = uploadId ? `&uploadId=${uploadId}` : ''
+    window.location.href = `/api/checkout-redirect?plan=${planKey}&url=${encodeURIComponent(url.trim())}${uploadParam}`
   }
 
   function handleDemo() {
     setIsPaid(true)
     setIsDemo(true)
     setActivePlan('full-audit')
-    analyze(DEMO_LISTING)
+    analyze(DEMO_LISTING, null, 'full-audit')
   }
 
   function reset() {
@@ -174,6 +262,9 @@ export default function Home() {
     setIsPaid(false)
     setActivePlan('quick-score')
     setStep('input')
+    setPhotoUploadId(null)
+    setInitialPhotoResults(null)
+    setInitialPhotoPreviews(null)
     localStorage.removeItem('listingiq_report')
     localStorage.removeItem('listingiq_plan')
     localStorage.removeItem('listingiq_url')
@@ -194,9 +285,13 @@ export default function Home() {
         plan={activePlan}
         isDemo={isDemo}
         listingUrl={url}
+        initialPhotoResults={initialPhotoResults}
+        initialPhotoPreviews={initialPhotoPreviews}
       />
     </main>
   )
+
+  const loadingSteps = photoUploadId ? LOADING_STEPS_WITH_PHOTOS : LOADING_STEPS
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-4 py-16" style={{ background: '#F7F6F3' }}>
@@ -313,12 +408,20 @@ export default function Home() {
             </div>
           )}
 
+          {/* Step 2.5: Photo upload (Full Audit only) */}
+          {step === 'photos' && (
+            <PhotoUploadStep
+              onContinue={handlePhotosContinue}
+              uploading={photoUploading}
+            />
+          )}
+
           {/* Step 3: Loading */}
           {step === 'loading' && (
             <div className="py-6 text-center">
               <div className="w-10 h-10 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin mx-auto mb-5" />
               <ul className="inline-block text-left space-y-1.5">
-                {LOADING_STEPS.map((s, i) => (
+                {loadingSteps.map((s, i) => (
                   <li key={i} className="text-sm transition-colors duration-300" style={{
                     color: i < stepIndex ? '#a8a29e' : i === stepIndex ? '#1c1917' : '#d6d3d1',
                     fontWeight: i === stepIndex ? 500 : 400,
@@ -347,8 +450,9 @@ export default function Home() {
             This report analyses your listing&apos;s text, title, photos, and presentation. Pricing strategy, calendar management, minimum-stay rules, and demand-based adjustments are outside this tool&apos;s scope but significantly impact performance.
           </p>
           <p>
-            Results are AI-generated and may not be fully accurate. Use them as guidance alongside your own judgement. ListingIQ is not affiliated with Airbnb.
+            Results are AI-generated, may not be fully accurate, and can vary between runs for the same listing. This is not financial advice. Use results as guidance alongside your own judgement. ListingIQ is not affiliated with Airbnb.
           </p>
+          <p className="text-stone-400 mt-2">v{APP_VERSION}</p>
         </div>
       </div>
     </main>
