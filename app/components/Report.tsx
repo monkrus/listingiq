@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ReportData } from '@/app/lib/types'
 import { PhotoAnalysisResult } from '@/app/api/analyze-photos/route'
 import ScoreCircle from './ScoreCircle'
@@ -155,6 +155,14 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
   const [photoResults, setPhotoResults] = useState<PhotoAnalysisResult | null>(initialPhotoResults ?? null)
   const [photoPreviews, setPhotoPreviews] = useState<string[]>(initialPhotoPreviews ?? [])
   const [selectedPkg, setSelectedPkg] = useState<string | null>('Premium')
+
+  // Sync photo results when they arrive after initial render
+  useEffect(() => {
+    if (initialPhotoResults) setPhotoResults(initialPhotoResults)
+  }, [initialPhotoResults])
+  useEffect(() => {
+    if (initialPhotoPreviews?.length) setPhotoPreviews(initialPhotoPreviews)
+  }, [initialPhotoPreviews])
   const hasPhotoAnalysis = plan === 'full-audit'
   // Use AI photo score when available, otherwise show count-based score only for Quick Score
   const photoScoreValue = photoResults ? photoResults.overallPhotoScore : null
