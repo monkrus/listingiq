@@ -127,9 +127,11 @@ export default function Home() {
     setInitialPhotoPreviews(null)
 
     const plan = planOverride || activePlan
-    // Check for photos: either server uploadId or IndexedDB fallback
-    const hasPhotos = !!uploadId || (plan === 'full-audit' && !!(await getPendingPhotos()))
-    animateSteps(hasPhotos)
+    // Check for user-uploaded photos
+    const hasUserPhotos = !!uploadId || (plan === 'full-audit' && !!(await getPendingPhotos()))
+    // Full Audit always analyzes photos (listing photos if no user uploads)
+    const willAnalyzePhotos = hasUserPhotos || plan === 'full-audit'
+    animateSteps(willAnalyzePhotos)
 
     try {
       // 1. Run text analysis
@@ -142,8 +144,8 @@ export default function Home() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Analysis failed')
 
-      // 2. If photos were pre-uploaded, run photo analysis
-      if (hasPhotos && plan === 'full-audit') {
+      // 2. For Full Audit, run photo analysis
+      if (plan === 'full-audit') {
         try {
           const listingContext = {
             title: data.titleSuggestions?.[0] || '',
@@ -153,7 +155,7 @@ export default function Home() {
 
           let photoRes: Response | null = null
 
-          // Try server-side photo store first (if we have an uploadId)
+          // Priority 1: Try server-side photo store (user uploaded before payment)
           if (uploadId) {
             photoRes = await fetch('/api/analyze-photos', {
               method: 'POST',
@@ -162,10 +164,9 @@ export default function Home() {
             })
           }
 
-          // If server photos expired (410) or no uploadId, fall back to IndexedDB
-          if (!photoRes || (!photoRes.ok && photoRes.status === 410)) {
-            if (!photoRes) console.log('[analyze] No uploadId, trying IndexedDB...')
-            else console.warn('[analyze] Server photos expired, trying IndexedDB fallback...')
+          // Priority 2: If server photos expired, try IndexedDB
+          if ((!photoRes || (!photoRes.ok && photoRes.status === 410)) && hasUserPhotos) {
+            console.warn('[analyze] Trying IndexedDB fallback...')
             const savedFiles = await getPendingPhotos()
             if (savedFiles?.length) {
               const form = new FormData()
@@ -176,14 +177,23 @@ export default function Home() {
             }
           }
 
+          // Priority 3: Auto-analyze listing photos from scraper
+          if (!photoRes && data.photoUrls?.length) {
+            console.log('[analyze] Auto-analyzing listing photos from scraper URLs...')
+            photoRes = await fetch('/api/analyze-photos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ photoUrls: data.photoUrls, sessionId, listingContext }),
+            })
+          }
+
           if (photoRes) {
             const photoData = await photoRes.json()
             if (photoRes.ok) {
               setInitialPhotoResults(photoData)
-              // Use server previews if available, otherwise generate from IndexedDB
               if (photoData.previews) {
                 setInitialPhotoPreviews(photoData.previews)
-              } else {
+              } else if (hasUserPhotos) {
                 const savedFiles = await getPendingPhotos()
                 if (savedFiles?.length) {
                   const previews = await Promise.all(savedFiles.map(f =>
@@ -196,7 +206,6 @@ export default function Home() {
                   setInitialPhotoPreviews(previews)
                 }
               }
-              // Clean up IndexedDB after successful analysis
               clearPendingPhotos()
             } else {
               console.warn('[analyze] Photo analysis failed:', photoData.error)

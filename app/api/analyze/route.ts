@@ -430,7 +430,9 @@ export async function POST(req: NextRequest) {
       ).catch(err => console.warn('[analyze] Failed to save report:', err))
     }
 
-    return NextResponse.json({ ...report, wasScraped, plan })
+    // Include photo URLs so client can auto-analyze listing photos for Full Audit
+    const photoUrls = listing.photoUrls?.length ? listing.photoUrls : undefined
+    return NextResponse.json({ ...report, wasScraped, plan, photoUrls })
   } catch (err) {
     console.error('[analyze] Error:', err)
     return NextResponse.json({ error: 'Analysis failed. Check your API key and try again.' }, { status: 500 })

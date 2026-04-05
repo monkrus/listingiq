@@ -156,16 +156,23 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
         .slice(0, 12)
     }
 
-    // Extract photo count
+    // Extract photo URLs and count
     let photoCount = 0
-    const photoMatches = dataStr.match(/"baseUrl":\s*"https:\/\/a0\.muscache\.com[^"]+"/g)
-    if (photoMatches) photoCount = photoMatches.length
+    let photoUrls: string[] = []
+    const photoMatches = dataStr.match(/"baseUrl":\s*"(https:\/\/a0\.muscache\.com[^"]+)"/g)
+    if (photoMatches) {
+      photoUrls = photoMatches
+        .map(m => m.match(/"baseUrl":\s*"([^"]+)"/)?.[1] ?? '')
+        .filter(Boolean)
+      photoUrls = Array.from(new Set(photoUrls)).slice(0, 10)
+      photoCount = photoMatches.length
+    }
 
     if (!title && !description) {
       return { ...base, scrapeError: 'API returned no listing data' }
     }
 
-    console.log(`[scraper:api] Success — title: ${title}, rating: ${rating}, reviews: ${reviewCount}`)
+    console.log(`[scraper:api] Success — title: ${title}, rating: ${rating}, reviews: ${reviewCount}, photos: ${photoUrls.length} URLs`)
 
     return {
       ...base,
@@ -173,6 +180,7 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
       location,
       description,
       photoCount,
+      photoUrls,
       rating,
       reviewCount,
       amenities,
@@ -247,6 +255,7 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
   let reviewCount = 0
   let reviews: string[] = []
   let photoCount = 0
+  let photoUrls: string[] = []
   let location = ''
 
   // Try deferred state script tags
@@ -304,8 +313,16 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
       }
 
       if (!photoCount) {
-        const pm = dataStr.match(/"baseUrl":\s*"https:\/\/a0\.muscache\.com[^"]+"/g)
-        if (pm) photoCount = pm.length
+        const pm = dataStr.match(/"baseUrl":\s*"(https:\/\/a0\.muscache\.com[^"]+)"/g)
+        if (pm) {
+          if (!photoUrls.length) {
+            photoUrls = pm
+              .map(m => m.match(/"baseUrl":\s*"([^"]+)"/)?.[1] ?? '')
+              .filter(Boolean)
+            photoUrls = Array.from(new Set(photoUrls)).slice(0, 10)
+          }
+          photoCount = pm.length
+        }
       }
     } catch {}
   }
@@ -331,7 +348,7 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
     return { ...base, scrapeError: 'Could not extract listing data from page' }
   }
 
-  return { ...base, title, location, description, photoCount, rating, reviewCount, amenities, reviews, scrapeSuccess: true }
+  return { ...base, title, location, description, photoCount, photoUrls, rating, reviewCount, amenities, reviews, scrapeSuccess: true }
 }
 
 /**
@@ -548,6 +565,13 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
       : typeof item.rating === 'number' ? item.rating : 0
     const reviewCount = typeof item.reviewsCount === 'number' ? (item.reviewsCount as number) : 0
     const photoCount = Array.isArray(item.photos) ? (item.photos as unknown[]).length : 0
+    let photoUrls: string[] = []
+    if (Array.isArray(item.photos)) {
+      photoUrls = (item.photos as Record<string, unknown>[])
+        .map(p => (p.pictureUrl as string) || (p.url as string) || (p.baseUrl as string) || '')
+        .filter(Boolean)
+        .slice(0, 10)
+    }
 
     // Extract amenities
     let amenities: string[] = []
@@ -568,7 +592,7 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
       return { ...base, scrapeError: 'Apify returned empty listing data' }
     }
 
-    console.log(`[scraper:apify] Success — title: ${title}, rating: ${rating}, reviews: ${reviewCount}`)
+    console.log(`[scraper:apify] Success — title: ${title}, rating: ${rating}, reviews: ${reviewCount}, photos: ${photoUrls.length} URLs`)
 
     return {
       ...base,
@@ -576,6 +600,7 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
       location,
       description,
       photoCount,
+      photoUrls,
       rating,
       reviewCount,
       amenities,

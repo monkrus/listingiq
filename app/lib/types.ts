@@ -34,6 +34,7 @@ export interface ListingInput {
   description?: string
   amenities?: string[]
   photoCount?: number
+  photoUrls?: string[]
   rating?: number
   reviewCount?: number
   reviews?: string[]

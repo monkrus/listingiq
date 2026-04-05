@@ -143,27 +143,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
     }
 
-    // Two input modes: FormData (direct upload) or JSON with uploadId (pre-payment)
+    // Three input modes: FormData (direct upload), JSON with uploadId (pre-payment), or JSON with photoUrls (scraped listing)
     const contentType = req.headers.get('content-type') || ''
     let storedPhotos: StoredPhoto[] | null = null
     let files: File[] = []
+    let photoUrls: string[] = []
     let sessionId: string | null = null
     let listingContextRaw: string | null = null
     let uploadId: string | null = null
 
     if (contentType.includes('application/json')) {
-      // Mode B: uploadId from pre-payment photo store
       const body = await req.json()
-      uploadId = body.uploadId
       sessionId = body.sessionId
       listingContextRaw = body.listingContext ? JSON.stringify(body.listingContext) : null
 
-      if (!uploadId) {
-        return NextResponse.json({ error: 'Missing uploadId' }, { status: 400 })
-      }
-      storedPhotos = getPhotos(uploadId)
-      if (!storedPhotos) {
-        return NextResponse.json({ error: 'Photos expired or not found. Please upload your photos again on the report page.' }, { status: 410 })
+      if (body.photoUrls?.length) {
+        // Mode C: URL-based photos from scraper
+        photoUrls = (body.photoUrls as string[]).slice(0, 10)
+      } else if (body.uploadId) {
+        // Mode B: uploadId from pre-payment photo store
+        uploadId = body.uploadId as string
+        storedPhotos = getPhotos(uploadId)
+        if (!storedPhotos) {
+          return NextResponse.json({ error: 'Photos expired or not found. Please upload your photos again on the report page.' }, { status: 410 })
+        }
+      } else {
+        return NextResponse.json({ error: 'Missing photoUrls or uploadId' }, { status: 400 })
       }
     } else {
       // Mode A: FormData file upload (existing flow)
@@ -197,7 +202,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const photoCount = storedPhotos ? storedPhotos.length : files.length
+    const photoCount = storedPhotos ? storedPhotos.length : photoUrls.length ? photoUrls.length : files.length
 
     // Verify payment for non-mock requests
     const isDev = process.env.NODE_ENV === 'development'
@@ -226,7 +231,29 @@ export async function POST(req: NextRequest) {
     const labeledContents: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
     const filenames: string[] = []
 
-    if (storedPhotos) {
+    if (photoUrls.length) {
+      // From scraped listing URLs — download and convert to base64
+      console.log(`[photo-analyze] Downloading ${photoUrls.length} listing photos...`)
+      for (let i = 0; i < photoUrls.length; i++) {
+        try {
+          const imgRes = await fetch(photoUrls[i])
+          if (!imgRes.ok) { console.warn(`[photo-analyze] Failed to fetch photo ${i + 1}: HTTP ${imgRes.status}`); continue }
+          const buf = await imgRes.arrayBuffer()
+          const base64 = Buffer.from(buf).toString('base64')
+          const ct = imgRes.headers.get('content-type') || 'image/jpeg'
+          const mediaType = ct.split(';')[0] as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+          const name = `listing-photo-${i + 1}.jpg`
+          labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${name}]` })
+          labeledContents.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } })
+          filenames.push(name)
+        } catch (err) {
+          console.warn(`[photo-analyze] Failed to download photo ${i + 1}:`, err)
+        }
+      }
+      if (!filenames.length) {
+        return NextResponse.json({ error: 'Could not download listing photos. Please upload photos manually.' }, { status: 502 })
+      }
+    } else if (storedPhotos) {
       // From pre-payment upload store
       for (let i = 0; i < storedPhotos.length; i++) {
         const p = storedPhotos[i]
@@ -250,7 +277,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.log(`[photo-analyze] Analyzing ${photoCount} photos...`)
+    // Use actual filenames count (some URL downloads may have failed)
+    const actualPhotoCount = filenames.length
+    console.log(`[photo-analyze] Analyzing ${actualPhotoCount} photos...`)
 
     let result: PhotoAnalysisResult
 
@@ -281,7 +310,7 @@ Check if the photos support what the listing promises. Flag if key selling point
             ...labeledContents,
             {
               type: 'text',
-              text: `Above are ${photoCount} Airbnb listing photos. Each is labeled [Photo N: filename].
+              text: `Above are ${actualPhotoCount} Airbnb listing photos. Each is labeled [Photo N: filename].
 
 Evaluate each photo's quality, classify its room type, give a keep/retake verdict, mark the best photos as hero shots, and identify missing shot types.${contextText}`,
             },
@@ -318,8 +347,8 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
       }
 
       // Validate: ensure we have the right number of photos with correct indices
-      if (result.photos.length !== photoCount) {
-        console.warn(`[photo-analyze] Expected ${photoCount} photos, got ${result.photos.length}`)
+      if (result.photos.length !== actualPhotoCount) {
+        console.warn(`[photo-analyze] Expected ${actualPhotoCount} photos, got ${result.photos.length}`)
       }
       // Fix any out-of-range indices (safety net)
       result.photos = result.photos.map((p, i) => ({
@@ -356,7 +385,7 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
       })
 
       // 4. Ensure suggestedOrder includes all photos
-      if (!result.suggestedOrder || result.suggestedOrder.length !== photoCount) {
+      if (!result.suggestedOrder || result.suggestedOrder.length !== actualPhotoCount) {
         result.suggestedOrder = [...result.photos].sort((a, b) => b.score - a.score).map(p => p.index)
       }
     } catch (apiErr) {
@@ -367,7 +396,11 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
     // Clean up stored photos after successful analysis
     if (uploadId) deletePhotos(uploadId)
 
-    // Include base64 previews when photos came from the store (client lost them after Stripe redirect)
+    // Include previews so client can display photo thumbnails
+    if (photoUrls.length) {
+      // Use the CDN URLs directly as previews
+      return NextResponse.json({ ...result, previews: photoUrls.slice(0, filenames.length) })
+    }
     if (storedPhotos) {
       const previews = storedPhotos.map(p => `data:${p.mediaType};base64,${p.base64}`)
       return NextResponse.json({ ...result, previews })
