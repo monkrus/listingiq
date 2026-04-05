@@ -152,8 +152,8 @@ function scoreColor(s: number) {
 }
 
 export default function Report({ data: d, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null }: Props) {
-  const [photoResults, setPhotoResults] = useState<PhotoAnalysisResult | null>(null)
-  const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
+  const [photoResults, setPhotoResults] = useState<PhotoAnalysisResult | null>(initialPhotoResults ?? null)
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>(initialPhotoPreviews ?? [])
   const [selectedPkg, setSelectedPkg] = useState<string | null>('Premium')
   const hasPhotoAnalysis = plan === 'full-audit'
   // Use AI photo score when available, otherwise show count-based score only for Quick Score
