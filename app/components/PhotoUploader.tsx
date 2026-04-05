@@ -416,7 +416,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
                 Recommended gallery order
               </p>
               <p className="text-xs text-blue-800 mb-3">Drag your Airbnb photos into this order for best results:</p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div className="flex gap-2 overflow-x-auto pb-1 pt-2 pl-2">
                 {result.suggestedOrder.map((photoIndex, pos) => (
                   <div key={pos} className="flex-shrink-0 text-center">
                     <div className="relative">
