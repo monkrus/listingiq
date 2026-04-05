@@ -31,7 +31,7 @@ function SuccessContent() {
           localStorage.setItem('listingiq_session_id', sessionId!)
           const urlParam = data.listingUrl ? `&url=${encodeURIComponent(data.listingUrl)}` : ''
           const photoParam = data.photoUploadId ? `&photoUploadId=${data.photoUploadId}` : ''
-          router.replace(`/?paid=1&plan=${data.plan || plan}${urlParam}${photoParam}`)
+          router.replace(`/?paid=1&plan=${data.plan || plan}${urlParam}${photoParam}&checkout=1`)
         } else {
           setError(data.error || 'Payment could not be verified.')
         }

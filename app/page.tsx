@@ -64,11 +64,11 @@ export default function Home() {
       }
 
       const urlParam = params.get('url')
-      const isEmailLink = !!urlParam
       const photoUploadParam = params.get('photoUploadId')
+      const isCheckout = params.get('checkout') === '1'
 
-      // Email re-access: don't auto-regenerate, let user click Analyze
-      if (isEmailLink) {
+      // Email re-access (no checkout flag): don't auto-regenerate, let user click Analyze
+      if (!isCheckout && urlParam) {
         setUrl(urlParam)
         localStorage.setItem('listingiq_url', urlParam)
         return
@@ -77,7 +77,7 @@ export default function Home() {
       // Direct Stripe redirect (first visit after payment): auto-analyze
       localStorage.removeItem('listingiq_report')
       localStorage.removeItem('listingiq_plan')
-      const savedUrl = localStorage.getItem('listingiq_url')
+      const savedUrl = urlParam || localStorage.getItem('listingiq_url')
       if (savedUrl) {
         setUrl(savedUrl)
         if (photoUploadParam) {
