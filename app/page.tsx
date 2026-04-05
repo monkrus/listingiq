@@ -452,7 +452,7 @@ export default function Home() {
           <p>
             Results are AI-generated, may not be fully accurate, and can vary between runs for the same listing. This is not financial advice. Use results as guidance alongside your own judgement. ListingIQ is not affiliated with Airbnb.
           </p>
-          <p className="text-stone-400 mt-2">v{APP_VERSION}</p>
+          <p className="text-stone-500 mt-2">v{APP_VERSION}</p>
         </div>
       </div>
     </main>
