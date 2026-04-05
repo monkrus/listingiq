@@ -322,9 +322,12 @@ export default function Home() {
   if (report) return (
     <main className="min-h-screen py-12" style={{ background: '#F7F6F3' }}>
       <div className="max-w-2xl mx-auto px-4 mb-6 text-center">
-        <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-3">
+        <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-2">
           ListingIQ · Airbnb Optimizer
         </div>
+        <button onClick={reset} className="text-sm text-stone-500 hover:text-stone-700 underline">
+          Analyze another listing
+        </button>
       </div>
       <Report
         data={report}

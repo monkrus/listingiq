@@ -197,15 +197,8 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
   return (
     <div className="max-w-2xl mx-auto px-4 pb-20">
 
-      {/* Analyze another */}
-      <div className="mb-2 text-center">
-        <button onClick={onReset} className="text-sm text-stone-500 hover:text-stone-700 underline">
-          Analyze another listing
-        </button>
-      </div>
-
       {/* Plan badge */}
-      <div className="mb-1 flex items-center justify-center">
+      <div className="mb-4 flex items-center justify-center">
         {plan && (
           <span style={{ fontFamily: 'var(--font-syne)' }} className="inline-block bg-stone-900 text-white text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full">
             {plan === 'quick-score' ? 'Quick Score' : 'Full Audit'}{isDemo ? ' · Demo' : ''}
