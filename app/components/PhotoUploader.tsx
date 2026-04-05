@@ -420,7 +420,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
                 {result.suggestedOrder.map((photoIndex, pos) => (
                   <div key={pos} className="flex-shrink-0 text-center">
                     <div className="relative">
-                      <img src={previews[photoIndex]} className="w-14 h-14 object-cover rounded-lg border border-blue-200" alt="" />
+                      <img src={previews[photoIndex]} className="w-24 h-24 object-cover rounded-lg border border-blue-200" alt="" />
                       <span className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                         {pos + 1}
                       </span>
