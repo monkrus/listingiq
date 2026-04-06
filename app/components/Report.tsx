@@ -164,14 +164,14 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
     if (initialPhotoPreviews?.length) setPhotoPreviews(initialPhotoPreviews)
   }, [initialPhotoPreviews])
   const hasPhotoAnalysis = plan === 'full-audit'
-  // Use AI photo score when available, otherwise show count-based score only for Quick Score
-  const photoScoreValue = photoResults ? photoResults.overallPhotoScore : null
+  // Use AI photo score when available; in demo mode use hardcoded average of demo photo scores
+  const photoScoreValue = photoResults ? photoResults.overallPhotoScore : isDemo ? 70 : null
   // Recalculate overall score including photo analysis (weighted: photos = 15%, others scaled down proportionally)
-  const overallScore = photoResults
+  const overallScore = (photoResults || isDemo)
     ? Math.round(
         d.titleScore * 0.17 +
         d.descriptionScore * 0.22 +
-        photoResults.overallPhotoScore * 0.15 +
+        (photoScoreValue ?? 0) * 0.15 +
         d.amenityScore * 0.17 +
         d.personaScore * 0.12 +
         d.reviewScore * 0.17
