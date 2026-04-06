@@ -84,6 +84,42 @@ export default function Home() {
         localStorage.removeItem('listingiq_photo_results')
         localStorage.removeItem('listingiq_photo_previews')
       }
+
+      // Email re-access: try Supabase cache first for instant display (no loading screen)
+      const sid = localStorage.getItem('listingiq_session_id')
+      if (!isCheckout && sid) {
+        ;(async () => {
+          try {
+            const cacheRes = await fetch(`/api/cached-report?session_id=${encodeURIComponent(sid)}`)
+            const cacheData = await cacheRes.json()
+            if (cacheData.found) {
+              setReport(cacheData.reportData as any)
+              if (cacheData.listingUrl) setUrl(cacheData.listingUrl)
+              if (cacheData.photoResults) setInitialPhotoResults(cacheData.photoResults)
+              if (cacheData.photoPreviews) setInitialPhotoPreviews(cacheData.photoPreviews)
+              localStorage.setItem('listingiq_report', JSON.stringify(cacheData.reportData))
+              localStorage.setItem('listingiq_plan', cacheData.plan || planParam || 'quick-score')
+              if (cacheData.listingUrl) localStorage.setItem('listingiq_url', cacheData.listingUrl)
+              if (cacheData.photoResults) localStorage.setItem('listingiq_photo_results', JSON.stringify(cacheData.photoResults))
+              if (cacheData.photoPreviews) localStorage.setItem('listingiq_photo_previews', JSON.stringify(cacheData.photoPreviews))
+              return
+            }
+          } catch {}
+          // Fallback: re-analyze if cache miss
+          const savedUrl = urlParam || localStorage.getItem('listingiq_url')
+          if (savedUrl) {
+            setUrl(savedUrl)
+            localStorage.setItem('listingiq_url', savedUrl)
+            if (photoUploadParam) {
+              setPhotoUploadId(photoUploadParam)
+            }
+            analyze({ url: savedUrl, reaccess: true }, photoUploadParam || null, planParam || 'quick-score')
+          }
+        })()
+        return
+      }
+
+      // Fresh checkout: run analysis
       const savedUrl = urlParam || localStorage.getItem('listingiq_url')
       if (savedUrl) {
         setUrl(savedUrl)
@@ -91,8 +127,7 @@ export default function Home() {
         if (photoUploadParam) {
           setPhotoUploadId(photoUploadParam)
         }
-        // Pass reaccess flag for email re-access so the API allows re-analysis
-        analyze({ url: savedUrl, reaccess: !isCheckout }, photoUploadParam || null, planParam || 'quick-score')
+        analyze({ url: savedUrl, reaccess: false }, photoUploadParam || null, planParam || 'quick-score')
       }
       return
     }
