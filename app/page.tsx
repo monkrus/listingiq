@@ -63,7 +63,15 @@ export default function Home() {
       const savedPlan = localStorage.getItem('listingiq_plan')
       const saved = localStorage.getItem('listingiq_report')
       if (saved && savedPlan === planParam) {
-        try { setReport(JSON.parse(saved)); return } catch {}
+        try {
+          setReport(JSON.parse(saved))
+          // Restore photo results from localStorage
+          const savedPhotos = localStorage.getItem('listingiq_photo_results')
+          const savedPreviews = localStorage.getItem('listingiq_photo_previews')
+          if (savedPhotos) setInitialPhotoResults(JSON.parse(savedPhotos))
+          if (savedPreviews) setInitialPhotoPreviews(JSON.parse(savedPreviews))
+          return
+        } catch {}
       }
 
       const urlParam = params.get('url')
@@ -73,6 +81,8 @@ export default function Home() {
       if (isCheckout) {
         localStorage.removeItem('listingiq_report')
         localStorage.removeItem('listingiq_plan')
+        localStorage.removeItem('listingiq_photo_results')
+        localStorage.removeItem('listingiq_photo_previews')
       }
       const savedUrl = urlParam || localStorage.getItem('listingiq_url')
       if (savedUrl) {
@@ -114,6 +124,13 @@ export default function Home() {
     if (urlParam) setUrl(urlParam)
   }, [])
 
+  function savePhotoResultsToStorage(photoResults: PhotoAnalysisResult, photoPreviews?: string[] | null) {
+    try {
+      localStorage.setItem('listingiq_photo_results', JSON.stringify(photoResults))
+      if (photoPreviews) localStorage.setItem('listingiq_photo_previews', JSON.stringify(photoPreviews))
+    } catch {}
+  }
+
   async function animateSteps(withPhotos: boolean) {
     const steps = withPhotos ? LOADING_STEPS_WITH_PHOTOS : LOADING_STEPS
     for (let i = 0; i < steps.length; i++) {
@@ -154,6 +171,7 @@ export default function Home() {
         if (data.cachedPhotoResults) {
           setInitialPhotoResults(data.cachedPhotoResults)
           if (data.cachedPhotoPreviews) setInitialPhotoPreviews(data.cachedPhotoPreviews)
+          savePhotoResultsToStorage(data.cachedPhotoResults, data.cachedPhotoPreviews)
         } else {
           try {
             const listingContext = {
@@ -200,21 +218,24 @@ export default function Home() {
               const photoData = await photoRes.json()
               if (photoRes.ok) {
                 setInitialPhotoResults(photoData)
+                let photoPreviews: string[] | null = null
                 if (photoData.previews) {
+                  photoPreviews = photoData.previews
                   setInitialPhotoPreviews(photoData.previews)
                 } else if (hasUserPhotos) {
                   const savedFiles = await getPendingPhotos()
                   if (savedFiles?.length) {
-                    const previews = await Promise.all(savedFiles.map(f =>
+                    photoPreviews = await Promise.all(savedFiles.map(f =>
                       new Promise<string>(resolve => {
                         const reader = new FileReader()
                         reader.onload = () => resolve(reader.result as string)
                         reader.readAsDataURL(f)
                       })
                     ))
-                    setInitialPhotoPreviews(previews)
+                    setInitialPhotoPreviews(photoPreviews)
                   }
                 }
+                savePhotoResultsToStorage(photoData, photoPreviews)
                 clearPendingPhotos()
               } else {
                 console.warn('[analyze] Photo analysis failed:', photoData.error)
@@ -327,6 +348,8 @@ export default function Home() {
     localStorage.removeItem('listingiq_plan')
     localStorage.removeItem('listingiq_url')
     localStorage.removeItem('listingiq_session_id')
+    localStorage.removeItem('listingiq_photo_results')
+    localStorage.removeItem('listingiq_photo_previews')
   }
 
   // Report view

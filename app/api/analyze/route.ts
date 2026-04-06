@@ -443,15 +443,16 @@ export async function POST(req: NextRequest) {
       ).catch(err => console.warn('[analyze] Failed to save report:', err))
     }
 
+    // Include photo URLs so client can auto-analyze listing photos for Full Audit
+    const photoUrls = listing.photoUrls?.length ? listing.photoUrls : undefined
+
     // Cache report in Supabase for email re-access (fire-and-forget)
     if (body.sessionId && !body.isDemo) {
-      const fullReport = { ...report, wasScraped, plan }
+      const fullReport = { ...report, wasScraped, plan, photoUrls }
       cacheReport(body.sessionId, plan, listingUrl, fullReport)
         .catch(err => console.warn('[analyze] Failed to cache report:', err))
     }
 
-    // Include photo URLs so client can auto-analyze listing photos for Full Audit
-    const photoUrls = listing.photoUrls?.length ? listing.photoUrls : undefined
     return NextResponse.json({ ...report, wasScraped, plan, photoUrls })
   } catch (err) {
     console.error('[analyze] Error:', err)
