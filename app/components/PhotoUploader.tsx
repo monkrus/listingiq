@@ -442,12 +442,14 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
             ))}
           </div>
 
-          <button
-            onClick={resetAll}
-            className="w-full py-3 border border-stone-200 rounded-xl text-sm text-stone-600 hover:bg-stone-50 transition-colors"
-          >
-            ← Upload {files.length ? 'different' : 'your'} photos
-          </button>
+          {files.length > 0 && (
+            <button
+              onClick={resetAll}
+              className="w-full py-3 border border-stone-200 rounded-xl text-sm text-stone-600 hover:bg-stone-50 transition-colors"
+            >
+              Upload different photos
+            </button>
+          )}
         </div>
       )}
     </div>
