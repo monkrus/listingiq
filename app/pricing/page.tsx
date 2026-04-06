@@ -10,7 +10,7 @@ const PLANS = [
     features: [
       'Full 7-section listing audit',
       'Title + description rewrites',
-      'SEO keywords & conversion tips',
+      'SEO keywords & optimization tips',
       'Priority action plan',
       'PDF report download',
     ],

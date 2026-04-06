@@ -50,7 +50,7 @@ function buildTextReport(d: ReportData, listingUrl?: string): string {
     `Problems:`,
     ...d.descriptionProblems.map(p => `  - ${p}`),
     ``,
-    `Full rewrite (copy & paste into your listing):`,
+    `Suggested rewrite (review and edit [bracketed placeholders] before using):`,
     ``,
     d.descriptionRewrite,
     ``,
@@ -81,7 +81,7 @@ function buildTextReport(d: ReportData, listingUrl?: string): string {
     d.seoKeywords.join(', '),
     ``,
     divider,
-    `CONVERSION TIPS`,
+    `OPTIMIZATION TIPS`,
     divider,
     ...d.conversionTips.map((t, i) => `${i + 1}. ${t}`),
     ``,
@@ -290,7 +290,8 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
       <ReportSection title="Description quality" score={d.descriptionScore}>
         <div className="mt-3">
           <div className="mb-3">{d.descriptionProblems.map((p, i) => <ProblemTag key={i} text={p} />)}</div>
-          <p className="text-xs text-stone-600 uppercase tracking-wide mb-1">Full rewrite — copy & paste into your listing</p>
+          <p className="text-xs text-stone-600 uppercase tracking-wide mb-1">Suggested rewrite</p>
+          <p className="text-[11px] text-stone-500 mb-2">Review and edit [bracketed placeholders] before using.</p>
           <div className="bg-stone-50 border border-stone-200 rounded-xl px-5 py-4 my-3 text-sm text-stone-800 leading-relaxed whitespace-pre-line">
             {d.descriptionRewrite}
           </div>
@@ -413,7 +414,7 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
       {/* Reviews */}
       <ReportSection title="Review sentiment" score={d.reviewScore}>
         <div className="mt-3">
-          <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Guests mention positively</p>
+          <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Review highlights</p>
           <div className="mb-3">{d.guestLoves.map((g, i) => <Chip key={i} text={g} />)}</div>
           {d.reviewRisks.length > 0 && (
             <>
@@ -425,12 +426,12 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
       </ReportSection>
 
       {/* SEO */}
-      <ReportSection title="Keywords & conversion tips" score={null}>
+      <ReportSection title="Keywords & optimization tips" score={null}>
         <div className="mt-3">
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Phrases your target guests search for</p>
           <div className="mb-3">{d.seoKeywords.map((k, i) => <Chip key={i} text={k} />)}</div>
           <p className="text-[11px] text-stone-600 mb-3 leading-relaxed">These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</p>
-          <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Booking conversion tips</p>
+          <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Listing optimization tips</p>
           {d.conversionTips.map((t, i) => <RowItem key={i} text={t} color="green" />)}
         </div>
       </ReportSection>
@@ -582,7 +583,7 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
 
 
       {/* Disclosure */}
-      <div className="text-[11px] text-stone-600 text-center mt-6 leading-relaxed max-w-md mx-auto space-y-2 font-bold">
+      <div className="text-xs text-stone-500 text-center mt-6 leading-relaxed max-w-md mx-auto space-y-2">
         <p>
           This report analyses your listing&apos;s text, title, photos, and presentation. Pricing strategy, calendar management, minimum-stay rules, and demand-based adjustments are outside this tool&apos;s scope but significantly impact performance.
         </p>

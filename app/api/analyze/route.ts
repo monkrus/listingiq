@@ -140,8 +140,8 @@ Required schema (use realistic scores, not perfect ones):
   "personaSuggestion": "<short actionable suggestion to better target this persona in the listing text — suggest weaving personas into a natural narrative, not rigid sections>",
   "competitorInsight": "<2-3 sentences about general best practices from top-performing Airbnb listings in this type of market. Base this on known Airbnb optimization principles, NOT on actual competitor data you don't have. Frame as 'top-performing listings in markets like yours typically...' not as specific competitor claims>",
   "reviewScore": <integer 0-100 — based on rating, review count, and the sample of reviews provided. If few or no reviews are available, score conservatively and note the limited data>,
-  "guestLoves": ["<thing>", "<thing>", "<thing>"] — based on the review snippets provided,
-  "reviewRisks": ["<risk>", "<risk>"] — based on review snippets and rating trends,
+  "guestLoves": ["<thing>", "<thing>", "<thing>"] — ONLY based on actual review text/snippets provided. If no review text is available, base these on the rating and review count (e.g., "4.87 rating across 158 reviews indicates consistently strong guest satisfaction"). Do NOT fabricate specific guest praise from listing features — if you haven't read the reviews, don't claim to know what guests mention positively,
+  "reviewRisks": ["<risk>", "<risk>"] — based on review snippets if available, otherwise note that no review text was available for detailed analysis,
   "seoKeywords": ["<kw1>", "<kw2>", "<kw3>", "<kw4>", "<kw5>", "<kw6>", "<kw7>"] — search phrases your target guests are likely using. These help you understand your audience and incorporate natural language, not game the algorithm,
   "conversionTips": ["<tip1>", "<tip2>", "<tip3>", "<tip4>", "<tip5>"] — actionable tips based on the actual listing text and known Airbnb best practices
 }`
