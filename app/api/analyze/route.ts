@@ -84,15 +84,10 @@ const SYSTEM = `You are an expert Airbnb listing optimization analyst with deep 
 
 ACCURACY RULES — these are critical:
 
-SCORING ANCHOR — account for proven performance:
-- If the listing has a rating of 4.8+ AND 100+ reviews, it is a proven high-performer. The overallScore MUST be at least 80 unless there are severe copy issues (e.g., nearly empty description, critical misinformation). A 5.0-rated Superhost with 100+ reviews should never score below 80.
-- If the listing has a rating of 4.5+ AND 50+ reviews, floor the overallScore at 70.
-- High review counts and ratings reflect real guest satisfaction — the score should acknowledge that. Deduct points only for genuine, actionable copy improvements, not hypothetical ones.
+SCORING — sub-scores must be honest and reflect real issues:
+- The overallScore is computed server-side as the average of all sub-scores. Do NOT try to inflate or deflect — just score each category honestly.
+- High review counts and ratings reflect real guest satisfaction. Deduct points only for genuine, actionable improvements, not hypothetical ones.
 - The reviewScore for a 5.0-rated listing with 100+ reviews must be 95+. Do not penalize listings for "limited review data" when 100+ reviews exist.
-
-OVERALL SCORE CONSISTENCY — the overallScore must be realistic:
-- The overallScore MUST be within 10 points of the average of titleScore, descriptionScore, amenityScore, personaScore, and reviewScore. Do NOT inflate the overallScore beyond what the sub-scores support.
-- Example: if sub-scores average 60, the overallScore must be between 50 and 70.
 
 REVIEW SCORE — penalize low review counts:
 - Under 15 reviews: reviewScore MUST NOT exceed 70 regardless of rating, because the sample is too small to be statistically reliable. Note this in reviewRisks.
@@ -123,7 +118,7 @@ VERIFY BEFORE RECOMMENDING — do NOT recommend what already exists:
 
 Required schema (use realistic scores, not perfect ones):
 {
-  "overallScore": <integer 0-100 — weighted average of title, description, amenity, persona, and review scores. Do NOT factor in photoScore since you haven't seen the actual photos>,
+  "overallScore": <integer 0-100 — this is overridden server-side as the average of sub-scores, so just return any placeholder>,
   "estimatedImprovement": "<string>" — this is overridden server-side so just return any placeholder,
   "summary": "<one punchy sentence verdict>",
   "priorityActions": ["<#1 highest-impact action to take first>", "<#2 next priority>", "<#3>", "<#4>", "<#5>"] — base these ONLY on the text data you can actually see (title, description, amenities, reviews). Do NOT include photo-specific actions like 'add more photos' since you haven't seen them,
@@ -168,7 +163,7 @@ function estimateImprovement(score: number): string {
  * - Strips title suggestions that exceed 50 chars
  * - Fixes guest capacity mismatches in title suggestions
  * - Removes amenity-gap recommendations for amenities already present
- * - Enforces scoring floor for high-performing listings
+ * - Computes overallScore as average of sub-scores
  */
 function validateReport(report: Record<string, unknown>, listing: ListingInput) {
   const amenitiesLower = (listing.amenities ?? []).map(a => a.toLowerCase()).join(' ')
@@ -257,7 +252,7 @@ function validateReport(report: Record<string, unknown>, listing: ListingInput) 
     report.reviewScore = 85
   }
 
-  // --- Overall score consistency with sub-scores ---
+  // --- Overall score: always computed from sub-scores (never trust AI's overall) ---
   const subScores = [
     report.titleScore as number,
     report.descriptionScore as number,
@@ -267,26 +262,10 @@ function validateReport(report: Record<string, unknown>, listing: ListingInput) 
   ].filter(s => typeof s === 'number')
   if (subScores.length > 0) {
     const avg = Math.round(subScores.reduce((a, b) => a + b, 0) / subScores.length)
-    const overall = report.overallScore as number
-    if (overall > avg + 10) {
-      console.log(`[validate] Clamped overallScore from ${overall} to ${avg + 10} (sub-score avg=${avg})`)
-      report.overallScore = avg + 10
-    } else if (overall < avg - 10) {
-      console.log(`[validate] Raised overallScore from ${overall} to ${avg - 10} (sub-score avg=${avg})`)
-      report.overallScore = avg - 10
+    if (avg !== report.overallScore) {
+      console.log(`[validate] Set overallScore to ${avg} (was ${report.overallScore}, sub-scores: ${subScores.join(', ')})`)
     }
-  }
-
-  // --- Scoring floor enforcement for proven high-performers ---
-  const rating = listing.rating ?? 0
-  const currentScore = report.overallScore as number
-
-  if (rating >= 4.8 && reviewCount >= 100 && currentScore < 80) {
-    console.log(`[validate] Boosted overallScore from ${currentScore} to 80 (rating=${rating}, reviews=${reviewCount})`)
-    report.overallScore = Math.max(currentScore, 80)
-  } else if (rating >= 4.5 && reviewCount >= 50 && currentScore < 70) {
-    console.log(`[validate] Boosted overallScore from ${currentScore} to 70 (rating=${rating}, reviews=${reviewCount})`)
-    report.overallScore = Math.max(currentScore, 70)
+    report.overallScore = avg
   }
 
   return report

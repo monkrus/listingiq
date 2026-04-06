@@ -192,7 +192,7 @@ export function ReportDocument({ data: d, photoResults, photoPreviews, listingUr
         <View style={s.content}>
           {/* Listing URL */}
           {listingUrl && (
-            <Text style={{ fontSize: 7, color: C.muted, textAlign: 'center', marginBottom: 8 }}>{listingUrl}</Text>
+            <Text style={{ fontSize: 7, color: C.muted, textAlign: 'center', marginBottom: 8 }}>{listingUrl.split('?')[0]}</Text>
           )}
 
           {/* Score hero */}
