@@ -336,9 +336,9 @@ export default function Home() {
         <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-2">
           ListingIQ · Airbnb Optimizer
         </div>
-        <button onClick={reset} className="text-sm text-stone-500 hover:text-stone-700 underline">
+        <a href="/" target="_blank" rel="noopener noreferrer" className="text-sm text-stone-500 hover:text-stone-700 underline">
           Analyze another listing
-        </button>
+        </a>
       </div>
       <Report
         data={report}
