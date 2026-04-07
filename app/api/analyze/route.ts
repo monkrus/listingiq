@@ -428,7 +428,7 @@ export async function POST(req: NextRequest) {
 
     // Cache report in Supabase for email re-access (fire-and-forget)
     if (body.sessionId && !body.isDemo) {
-      const fullReport = { ...report, wasScraped, plan, photoUrls }
+      const fullReport = { ...report, wasScraped, plan, photoUrls, listingUrl }
       cacheReport(body.sessionId, plan, listingUrl, fullReport)
         .catch(err => console.warn('[analyze] Failed to cache report:', err))
     }

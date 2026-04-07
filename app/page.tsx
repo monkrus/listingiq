@@ -94,12 +94,13 @@ export default function Home() {
             const cacheData = await cacheRes.json()
             if (cacheData.found) {
               setReport(cacheData.reportData as any)
-              if (cacheData.listingUrl) setUrl(cacheData.listingUrl)
+              const cachedUrl = cacheData.listingUrl || cacheData.reportData?.listingUrl || ''
+              if (cachedUrl) setUrl(cachedUrl)
               if (cacheData.photoResults) setInitialPhotoResults(cacheData.photoResults)
               if (cacheData.photoPreviews) setInitialPhotoPreviews(cacheData.photoPreviews)
               localStorage.setItem('listingiq_report', JSON.stringify(cacheData.reportData))
               localStorage.setItem('listingiq_plan', cacheData.plan || planParam || 'quick-score')
-              if (cacheData.listingUrl) localStorage.setItem('listingiq_url', cacheData.listingUrl)
+              if (cachedUrl) localStorage.setItem('listingiq_url', cachedUrl)
               if (cacheData.photoResults) localStorage.setItem('listingiq_photo_results', JSON.stringify(cacheData.photoResults))
               if (cacheData.photoPreviews) localStorage.setItem('listingiq_photo_previews', JSON.stringify(cacheData.photoPreviews))
               return
