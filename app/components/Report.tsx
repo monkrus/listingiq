@@ -23,7 +23,7 @@ function buildTextReport(d: ReportData, listingUrl?: string): string {
   const lines: string[] = [
     `LISTINGIQ REPORT`,
     `Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
-    ...(listingUrl ? [`Listing: ${listingUrl}`] : []),
+    ...(listingUrl ? [`Listing: ${listingUrl.split('?')[0]}`] : []),
     divider,
     ``,
     `OVERALL SCORE: ${d.overallScore}/100`,
@@ -71,7 +71,7 @@ function buildTextReport(d: ReportData, listingUrl?: string): string {
     divider,
     `REVIEWS (${d.reviewScore}/100)`,
     divider,
-    `Guests love: ${d.guestLoves.join(', ')}`,
+    `Review highlights: ${d.guestLoves.join(', ')}`,
     ...(d.reviewRisks.length ? [`Watch out for:`, ...d.reviewRisks.map(r => `  - ${r}`)] : []),
     ``,
     divider,
