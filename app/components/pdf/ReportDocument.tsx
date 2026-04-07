@@ -162,7 +162,23 @@ function RowItems({ items, dotColor }: { items: string[]; dotColor: string }) {
   )
 }
 
-export function ReportDocument({ data: d, photoResults, photoPreviews, listingUrl }: { data: ReportData; photoResults?: PhotoAnalysisResult | null; photoPreviews?: string[]; listingUrl?: string }) {
+export function ReportDocument({ data: rawData, photoResults, photoPreviews, listingUrl }: { data: ReportData; photoResults?: PhotoAnalysisResult | null; photoPreviews?: string[]; listingUrl?: string }) {
+  // Ensure all array fields have safe defaults to prevent crashes from incomplete data
+  const d: ReportData = {
+    ...rawData,
+    priorityActions: rawData.priorityActions ?? [],
+    titleProblems: rawData.titleProblems ?? [],
+    titleSuggestions: rawData.titleSuggestions ?? [],
+    descriptionProblems: rawData.descriptionProblems ?? [],
+    missingPhotos: rawData.missingPhotos ?? [],
+    topAmenities: rawData.topAmenities ?? [],
+    amenityGaps: rawData.amenityGaps ?? [],
+    personaProblems: rawData.personaProblems ?? [],
+    guestLoves: rawData.guestLoves ?? [],
+    reviewRisks: rawData.reviewRisks ?? [],
+    seoKeywords: rawData.seoKeywords ?? [],
+    conversionTips: rawData.conversionTips ?? [],
+  }
   const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
   const subScores = photoResults
     ? [

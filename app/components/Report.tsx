@@ -18,7 +18,21 @@ interface Props {
   initialPhotoPreviews?: string[] | null
 }
 
-function buildTextReport(d: ReportData, listingUrl?: string): string {
+function buildTextReport(raw: ReportData, listingUrl?: string): string {
+  const d = {
+    ...raw,
+    priorityActions: raw.priorityActions ?? [],
+    titleProblems: raw.titleProblems ?? [],
+    titleSuggestions: raw.titleSuggestions ?? [],
+    descriptionProblems: raw.descriptionProblems ?? [],
+    topAmenities: raw.topAmenities ?? [],
+    amenityGaps: raw.amenityGaps ?? [],
+    personaProblems: raw.personaProblems ?? [],
+    guestLoves: raw.guestLoves ?? [],
+    reviewRisks: raw.reviewRisks ?? [],
+    seoKeywords: raw.seoKeywords ?? [],
+    conversionTips: raw.conversionTips ?? [],
+  }
   const divider = '─'.repeat(40)
   const lines: string[] = [
     `LISTINGIQ REPORT`,
@@ -151,7 +165,23 @@ function scoreColor(s: number) {
   return s >= 80 ? '#4a7c2f' : s >= 60 ? '#b45309' : '#b91c1c'
 }
 
-export default function Report({ data: d, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null }: Props) {
+export default function Report({ data: rawData, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null }: Props) {
+  // Ensure all array fields have safe defaults to prevent crashes from incomplete AI responses
+  const d: ReportData = {
+    ...rawData,
+    priorityActions: rawData.priorityActions ?? [],
+    titleProblems: rawData.titleProblems ?? [],
+    titleSuggestions: rawData.titleSuggestions ?? [],
+    descriptionProblems: rawData.descriptionProblems ?? [],
+    missingPhotos: rawData.missingPhotos ?? [],
+    topAmenities: rawData.topAmenities ?? [],
+    amenityGaps: rawData.amenityGaps ?? [],
+    personaProblems: rawData.personaProblems ?? [],
+    guestLoves: rawData.guestLoves ?? [],
+    reviewRisks: rawData.reviewRisks ?? [],
+    seoKeywords: rawData.seoKeywords ?? [],
+    conversionTips: rawData.conversionTips ?? [],
+  }
   const [photoResults, setPhotoResults] = useState<PhotoAnalysisResult | null>(initialPhotoResults ?? null)
   const [photoPreviews, setPhotoPreviews] = useState<string[]>(initialPhotoPreviews ?? [])
   const [selectedPkg, setSelectedPkg] = useState<string | null>('Premium')
