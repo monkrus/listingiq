@@ -287,7 +287,7 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
       </ReportSection>
 
       {/* Description */}
-      <ReportSection title="Description quality" score={d.descriptionScore}>
+      <ReportSection title="Description quality" score={d.descriptionScore} defaultOpen>
         <div className="mt-3">
           <div className="mb-3">{d.descriptionProblems.map((p, i) => <ProblemTag key={i} text={p} />)}</div>
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-1">Suggested rewrite</p>
@@ -300,7 +300,7 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
 
       {/* Photos — only show for Quick Score as general tips; Full Audit gets AI Photo Analysis instead */}
       {!hasPhotoAnalysis && (
-        <ReportSection title="Photo tips" score={null}>
+        <ReportSection title="Photo tips" score={null} defaultOpen>
           <div className="mt-3">
             <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Photos top-performing listings in your market include</p>
             {d.missingPhotos.map((m, i) => <RowItem key={i} text={m} color="amber" />)}
@@ -379,7 +379,7 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
 
 
       {/* Amenities */}
-      <ReportSection title="Amenity strength" score={d.amenityScore}>
+      <ReportSection title="Amenity strength" score={d.amenityScore} defaultOpen>
         <div className="mt-3">
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Your strongest amenities</p>
           <div className="mb-3">{d.topAmenities.map((a, i) => <Chip key={i} text={a} />)}</div>
@@ -393,7 +393,7 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
       </ReportSection>
 
       {/* Guest persona */}
-      <ReportSection title="Guest persona match" score={d.personaScore}>
+      <ReportSection title="Guest persona match" score={d.personaScore} defaultOpen>
         <div className="mt-3">
           <p className="text-sm mb-3">Primary guest type: <strong>{d.primaryPersona}</strong></p>
           <div className="mb-3">{d.personaProblems.map((p, i) => <ProblemTag key={i} text={p} />)}</div>
@@ -412,7 +412,7 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
       )}
 
       {/* Reviews */}
-      <ReportSection title="Review sentiment" score={d.reviewScore}>
+      <ReportSection title="Review sentiment" score={d.reviewScore} defaultOpen>
         <div className="mt-3">
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Review highlights</p>
           <div className="mb-3">{d.guestLoves.map((g, i) => <Chip key={i} text={g} />)}</div>
@@ -426,7 +426,7 @@ export default function Report({ data: d, onReset, plan = 'quick-score', isDemo 
       </ReportSection>
 
       {/* SEO */}
-      <ReportSection title="Keywords & optimization tips" score={null}>
+      <ReportSection title="Keywords & optimization tips" score={null} defaultOpen>
         <div className="mt-3">
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Phrases your target guests search for</p>
           <div className="mb-3">{d.seoKeywords.map((k, i) => <Chip key={i} text={k} />)}</div>
