@@ -94,6 +94,7 @@ REVIEW SCORE — penalize low review counts:
 - 15-30 reviews: reviewScore cap at 80.
 - 30-50 reviews: reviewScore cap at 85.
 - 50+ reviews: no cap — score based on rating and review content.
+- 0 reviews: guestLoves MUST contain only ONE item stating that no reviews exist yet. Do NOT speculate about what guests "will likely" praise or what "typically" gets mentioned — there is no review data to draw from.
 
 PHOTO REFERENCES — do NOT comment on photo quality:
 - You have NOT seen the listing photos. Do NOT describe photos as "strong", "great", "professional", or any quality judgment in the summary or anywhere else.
