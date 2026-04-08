@@ -134,16 +134,21 @@ export async function saveReport(
 export async function cacheReport(sessionId: string, plan: string, listingUrl: string, reportData: object, photoResults?: object | null, photoPreviews?: string[] | null): Promise<boolean> {
   const db = getSupabaseAdmin()
   if (!db) { console.warn('[db] Supabase not configured, skipping cacheReport'); return false }
+  // Only include photo fields when we have actual photo data, so we don't
+  // overwrite results that updateCachedPhotos may have already saved (race condition)
+  const row: Record<string, unknown> = {
+    session_id: sessionId,
+    plan,
+    listing_url: listingUrl,
+    report_data: reportData,
+  }
+  if (photoResults) {
+    row.photo_results = photoResults
+    row.photo_previews = photoPreviews || null
+  }
   const { error } = await db
     .from('cached_reports')
-    .upsert({
-      session_id: sessionId,
-      plan,
-      listing_url: listingUrl,
-      report_data: reportData,
-      photo_results: photoResults || null,
-      photo_previews: photoPreviews || null,
-    })
+    .upsert(row)
   if (error) { console.error('[db] cacheReport:', error); return false }
   return true
 }

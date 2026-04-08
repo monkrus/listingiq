@@ -73,7 +73,7 @@ export async function sendReceiptEmail(opts: {
               </p>
               ${opts.plan === 'full-audit' ? `
               <p style="margin:0 0 16px;color:#57534e;font-size:14px;line-height:1.6;">
-                Your Full Audit includes photo analysis — upload up to 10 listing photos on the results page to get per-photo feedback and a recommended gallery order.
+                Your Full Audit includes AI photo analysis with per-photo feedback and a recommended gallery order.
               </p>` : ''}
               <!-- Divider -->
               <hr style="border:none;border-top:1px solid #e7e5e4;margin:24px 0;">
