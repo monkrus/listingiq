@@ -28,7 +28,6 @@ const PLANS = [
       'AI photo analysis (up to 10 photos)',
       'Photo reorder + retake instructions',
       'Gallery order suggestion',
-      'Report sent via email',
     ],
     cta: 'Get Full Audit · $49',
   },

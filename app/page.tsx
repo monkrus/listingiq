@@ -486,7 +486,7 @@ export default function Home() {
                     name: 'Full Audit',
                     price: '$49',
                     popular: true,
-                    features: ['Everything in Quick Score', 'AI photo analysis (10 photos)', 'Photo reorder + retake tips', 'Gallery order suggestion', 'Report sent via email'],
+                    features: ['Everything in Quick Score', 'AI photo analysis (up to 10 photos)', 'Photo reorder + retake tips', 'Gallery order suggestion'],
                   },
                 ].map(p => (
                   <button
@@ -504,7 +504,7 @@ export default function Home() {
                     <div style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-900">{p.name}</div>
                     <div style={{ fontFamily: 'var(--font-syne)' }} className="text-2xl font-bold text-stone-900 my-1">{p.price}</div>
                     <div className="text-[11px] text-stone-600 mb-2">one time</div>
-                    <ul className="text-[11px] text-stone-600 space-y-1 text-left mt-auto">
+                    <ul className="text-[11px] text-stone-600 space-y-1 text-left">
                       {p.features.map((f, i) => (
                         <li key={i} className="flex gap-1">
                           <span className="text-green-600 flex-shrink-0">&#10003;</span>{f}
