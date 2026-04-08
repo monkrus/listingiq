@@ -23,9 +23,10 @@ interface Props {
   photoResults?: PhotoAnalysisResult | null
   photoPreviews?: string[]
   listingUrl?: string
+  plan?: string
   className?: string
 }
 
-export default function DownloadPdfButton({ data, photoResults, photoPreviews, listingUrl, className }: Props) {
-  return <PdfLinkInner data={data} photoResults={photoResults} photoPreviews={photoPreviews} listingUrl={listingUrl} className={className} />
+export default function DownloadPdfButton({ data, photoResults, photoPreviews, listingUrl, plan, className }: Props) {
+  return <PdfLinkInner data={data} photoResults={photoResults} photoPreviews={photoPreviews} listingUrl={listingUrl} plan={plan} className={className} />
 }

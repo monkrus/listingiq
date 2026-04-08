@@ -37,7 +37,6 @@ setInterval(() => {
 export function registerPaidSession(sessionId: string, plan: string): void {
   if (!sessions.has(sessionId)) {
     sessions.set(sessionId, { analyzeCount: 0, photoCount: 0, plan, createdAt: Date.now() })
-    console.log(`[session-usage] Registered: ${sessionId} plan=${plan}`)
   }
 }
 

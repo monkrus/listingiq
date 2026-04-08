@@ -247,7 +247,6 @@ export default function Home() {
 
             // Priority 3: Auto-analyze listing photos from scraper
             if (!photoRes && data.photoUrls?.length) {
-              console.log('[analyze] Auto-analyzing listing photos from scraper URLs...')
               photoRes = await fetch('/api/analyze-photos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -48,12 +48,10 @@ export function getCachedReport<T = unknown>(url: string, plan: string): T | nul
     cache.delete(key)
     return null
   }
-  console.log(`[cache] Hit for ${key}`)
   return entry.data as T
 }
 
 export function setCachedReport(url: string, plan: string, data: unknown): void {
   const key = buildKey(url, plan)
   cache.set(key, { data, createdAt: Date.now() })
-  console.log(`[cache] Stored ${key}`)
 }

@@ -139,7 +139,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
             <span className="inline-block bg-green-100 text-green-800 text-sm font-medium px-3 py-1.5 rounded-lg">
               Est. improvement potential: {d.estimatedImprovement}
             </span>
-            <DownloadPdfButton data={d} photoResults={photoResults} photoPreviews={photoPreviews} listingUrl={listingUrl} />
+            <DownloadPdfButton data={d} photoResults={photoResults} photoPreviews={photoPreviews} listingUrl={listingUrl} plan={plan} />
           </div>
           <p className="text-xs text-stone-500 mt-2">
             Save your report — download the PDF before leaving this page.

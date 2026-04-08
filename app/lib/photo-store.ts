@@ -33,7 +33,6 @@ export function storePhotos(uploadId: string, photos: StoredPhoto[]): boolean {
     return false
   }
   store.set(uploadId, { photos, createdAt: Date.now() })
-  console.log(`[photo-store] Stored ${photos.length} photos as ${uploadId}`)
   return true
 }
 

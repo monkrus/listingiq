@@ -33,8 +33,6 @@ export async function POST(req: NextRequest) {
         const session = event.data.object as Stripe.Checkout.Session
         const planKey = session.metadata?.planKey || 'quick-score'
         const email = session.customer_details?.email || session.metadata?.email
-        console.log(`[webhook] Checkout completed: session=${session.id} plan=${planKey} email=${email}`)
-
         // Register the session in our usage tracker so the API routes can validate it
         registerPaidSession(session.id, planKey)
 
@@ -51,7 +49,6 @@ export async function POST(req: NextRequest) {
           const creditMap: Record<string, number> = { 'quick-score': 1, 'full-audit': 1 }
           const credits = creditMap[planKey] ?? 1
           await db.rpc('add_credits', { uid: userId, amount: credits })
-          console.log(`[webhook] Credits added: user=${userId} credits=${credits}`)
         }
         break
       }
@@ -63,7 +60,7 @@ export async function POST(req: NextRequest) {
       }
 
       default:
-        console.log(`[webhook] Unhandled event: ${event.type}`)
+        break
     }
   } catch (err) {
     console.error('[webhook] Handler error:', err)

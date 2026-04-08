@@ -162,7 +162,7 @@ function RowItems({ items, dotColor }: { items: string[]; dotColor: string }) {
   )
 }
 
-export function ReportDocument({ data: rawData, photoResults, photoPreviews, listingUrl }: { data: ReportData; photoResults?: PhotoAnalysisResult | null; photoPreviews?: string[]; listingUrl?: string }) {
+export function ReportDocument({ data: rawData, photoResults, photoPreviews, listingUrl, plan }: { data: ReportData; photoResults?: PhotoAnalysisResult | null; photoPreviews?: string[]; listingUrl?: string; plan?: string }) {
   // Ensure all array fields have safe defaults to prevent crashes from incomplete data
   const d: ReportData = {
     ...rawData,
@@ -191,11 +191,13 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
         d.reviewScore * 0.17
       )
     : d.overallScore
-  const subScores = photoResults
+  const hasPhotoAnalysis = plan === 'full-audit'
+  const photoScoreValue = photoResults ? photoResults.overallPhotoScore : null
+  const subScores: { label: string; v: number | null }[] = hasPhotoAnalysis
     ? [
         { label: 'Title', v: d.titleScore },
         { label: 'Description', v: d.descriptionScore },
-        { label: 'Photos', v: photoResults.overallPhotoScore },
+        { label: 'Photos', v: photoScoreValue },
         { label: 'Amenities', v: d.amenityScore },
         { label: 'Persona', v: d.personaScore },
         { label: 'Reviews', v: d.reviewScore },
@@ -242,10 +244,16 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
             {subScores.map(({ label, v }) => (
               <View key={label} style={s.subScoreCard}>
                 <Text style={s.subScoreLabel}>{label}</Text>
-                <Text style={[s.subScoreValue, { color: scoreColor(v) }]}>{v}</Text>
-                <View style={s.subScoreBar}>
-                  <View style={[s.subScoreBarFill, { width: `${v}%`, backgroundColor: scoreColor(v) }]} />
-                </View>
+                {v !== null ? (
+                  <>
+                    <Text style={[s.subScoreValue, { color: scoreColor(v) }]}>{v}</Text>
+                    <View style={s.subScoreBar}>
+                      <View style={[s.subScoreBarFill, { width: `${v}%`, backgroundColor: scoreColor(v) }]} />
+                    </View>
+                  </>
+                ) : (
+                  <Text style={[s.subScoreValue, { color: C.muted, fontSize: 11 }]}>—</Text>
+                )}
               </View>
             ))}
           </View>
@@ -279,8 +287,8 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
             <View style={s.rewriteBox}><Text style={s.rewriteText}>{d.descriptionRewrite}</Text></View>
           </SectionCard>
 
-          {/* Photo tips — only when no AI photo analysis */}
-          {!photoResults && (
+          {/* Photo tips — Quick Score only (matches web report gating) */}
+          {!hasPhotoAnalysis && (
             <View style={s.sectionCard} wrap={false}>
               <View style={s.sectionHeader}>
                 <Text style={s.sectionTitle}>Photo tips</Text>
@@ -408,6 +416,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
             <View style={s.sectionBody}>
             <Text style={s.subLabel}>Phrases your target guests search for</Text>
             <ChipTags items={d.seoKeywords} />
+            <Text style={[s.rowItemText, { fontSize: 7, color: C.muted, lineHeight: 1.5, marginBottom: 6 }]}>These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</Text>
             <Text style={s.subLabel}>Listing optimization tips</Text>
             <RowItems items={d.conversionTips} dotColor={C.green} />
             </View>

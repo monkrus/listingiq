@@ -99,7 +99,6 @@ export async function sendReceiptEmail(opts: {
 </html>`,
     })
 
-    console.log(`[email] Receipt sent to ${opts.to} for ${planName}`)
   } catch (err) {
     console.error('[email] Failed to send:', err instanceof Error ? err.message : err)
   }

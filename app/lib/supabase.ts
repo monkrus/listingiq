@@ -145,7 +145,6 @@ export async function cacheReport(sessionId: string, plan: string, listingUrl: s
       photo_previews: photoPreviews || null,
     })
   if (error) { console.error('[db] cacheReport:', error); return false }
-  console.log(`[db] Cached report for session ${sessionId}`)
   return true
 }
 

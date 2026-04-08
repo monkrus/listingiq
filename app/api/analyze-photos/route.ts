@@ -220,7 +220,6 @@ export async function POST(req: NextRequest) {
 
     // Return mock data when USE_MOCK_API is enabled
     if (USE_MOCK) {
-      console.log('[photo-analyze] Using mock response (USE_MOCK_API=true)')
       const filenames = storedPhotos
         ? storedPhotos.map(p => p.filename)
         : files.map(f => f.name)
@@ -234,7 +233,6 @@ export async function POST(req: NextRequest) {
 
     if (photoUrls.length) {
       // From scraped listing URLs — download and convert to base64
-      console.log(`[photo-analyze] Downloading ${photoUrls.length} listing photos...`)
       for (let i = 0; i < photoUrls.length; i++) {
         try {
           const imgRes = await fetch(photoUrls[i])
@@ -280,8 +278,6 @@ export async function POST(req: NextRequest) {
 
     // Use actual filenames count (some URL downloads may have failed)
     const actualPhotoCount = filenames.length
-    console.log(`[photo-analyze] Analyzing ${actualPhotoCount} photos...`)
-
     let result: PhotoAnalysisResult
 
     try {

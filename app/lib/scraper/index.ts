@@ -172,8 +172,6 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
       return { ...base, scrapeError: 'API returned no listing data' }
     }
 
-    console.log(`[scraper:api] Success — title: ${title}, rating: ${rating}, reviews: ${reviewCount}, photos: ${photoUrls.length} URLs`)
-
     return {
       ...base,
       title,
@@ -220,7 +218,6 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
   }
 
   const html = await res.text()
-  console.log(`[scraper:fetch] Got ${html.length} bytes`)
 
   // --- Extract title ---
   // Prefer listingTitle from embedded data, then <title> tag (has host title), og:title last (auto-generated)
@@ -592,8 +589,6 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
       return { ...base, scrapeError: 'Apify returned empty listing data' }
     }
 
-    console.log(`[scraper:apify] Success — title: ${title}, rating: ${rating}, reviews: ${reviewCount}, photos: ${photoUrls.length} URLs`)
-
     return {
       ...base,
       title,
@@ -624,7 +619,6 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
 export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> {
   // Try Apify first (most reliable at scale)
   if (process.env.APIFY_API_TOKEN) {
-    console.log('[scraper] Trying Apify scrape...')
     const apifyResult = await apifyScrape(url)
     if (apifyResult.scrapeSuccess) {
       return apifyResult
@@ -632,24 +626,18 @@ export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> 
     console.warn('[scraper] Apify scrape failed:', apifyResult.scrapeError)
   }
 
-  // Try API-based scraping (works on Vercel)
-  console.log('[scraper] Trying API-based scrape...')
   const apiResult = await apiScrape(url)
   if (apiResult.scrapeSuccess) {
     return apiResult
   }
   console.warn('[scraper] API scrape failed:', apiResult.scrapeError)
 
-  // Try HTML fetch fallback
-  console.log('[scraper] Trying fetch-based scrape...')
   const fetchResult = await fetchScrape(url)
   if (fetchResult.scrapeSuccess) {
     return fetchResult
   }
   console.warn('[scraper] Fetch scrape failed:', fetchResult.scrapeError)
 
-  // Fall back to Playwright (local dev only)
-  console.log('[scraper] Trying Playwright fallback...')
   const pwResult = await playwrightScrape(url)
   if (pwResult.scrapeSuccess) {
     return pwResult

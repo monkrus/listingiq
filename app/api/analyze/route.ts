@@ -220,7 +220,6 @@ function validateReport(report: Record<string, unknown>, listing: ListingInput) 
         if (gapMatchesGroup) {
           const listingHasIt = keywords.some(kw => allListingText.includes(kw))
           if (listingHasIt) {
-            console.log(`[validate] Filtered out amenity gap "${gap}" — already present in listing`)
             return false
           }
         }
@@ -236,7 +235,6 @@ function validateReport(report: Record<string, unknown>, listing: ListingInput) 
       // Filter out "add self check-in" if listing already has it
       if (actionLower.includes('self check-in') || actionLower.includes('self checkin') || actionLower.includes('key safe') || actionLower.includes('smart lock')) {
         if (allListingText.includes('self check-in') || allListingText.includes('lockbox') || allListingText.includes('lock box') || allListingText.includes('keypad') || allListingText.includes('smart lock') || allListingText.includes('key safe')) {
-          console.log(`[validate] Filtered out priority action — self check-in already exists`)
           return false
         }
       }
@@ -248,13 +246,10 @@ function validateReport(report: Record<string, unknown>, listing: ListingInput) 
   const reviewCount = listing.reviewCount ?? 0
   const reviewScore = report.reviewScore as number
   if (reviewCount < 15 && reviewScore > 70) {
-    console.log(`[validate] Capped reviewScore from ${reviewScore} to 70 (only ${reviewCount} reviews)`)
     report.reviewScore = 70
   } else if (reviewCount < 30 && reviewScore > 80) {
-    console.log(`[validate] Capped reviewScore from ${reviewScore} to 80 (only ${reviewCount} reviews)`)
     report.reviewScore = 80
   } else if (reviewCount < 50 && reviewScore > 85) {
-    console.log(`[validate] Capped reviewScore from ${reviewScore} to 85 (only ${reviewCount} reviews)`)
     report.reviewScore = 85
   }
 
@@ -269,7 +264,7 @@ function validateReport(report: Record<string, unknown>, listing: ListingInput) 
   if (subScores.length > 0) {
     const avg = Math.round(subScores.reduce((a, b) => a + b, 0) / subScores.length)
     if (avg !== report.overallScore) {
-      console.log(`[validate] Set overallScore to ${avg} (was ${report.overallScore}, sub-scores: ${subScores.join(', ')})`)
+      // Recalculated from sub-scores
     }
     report.overallScore = avg
   }
@@ -333,7 +328,6 @@ export async function POST(req: NextRequest) {
     if (body.reaccess && body.sessionId) {
       const cached = await getCachedReportBySession(body.sessionId)
       if (cached) {
-        console.log(`[analyze] Returning Supabase-cached report for session ${body.sessionId}`)
         return NextResponse.json({
           ...cached.reportData,
           cachedPhotoResults: cached.photoResults,
@@ -344,7 +338,6 @@ export async function POST(req: NextRequest) {
 
     // Return mock data for demo or when USE_MOCK_API is enabled
     if (isDemo || USE_MOCK) {
-      console.log(`[analyze] Using mock response (${isDemo ? 'demo' : 'USE_MOCK_API=true'})`)
       return NextResponse.json({
         ...MOCK_REPORT,
         estimatedImprovement: estimateImprovement(MOCK_REPORT.overallScore),
@@ -356,13 +349,11 @@ export async function POST(req: NextRequest) {
 
     // If a real Airbnb URL is provided (not demo), attempt to scrape it
     if (!body.isDemo && body.url && isValidAirbnbUrl(body.url)) {
-      console.log(`[analyze] Plan: ${plan} | Scraping:`, body.url)
       const scraped = await scrapeAirbnbListing(body.url)
 
       if (scraped.scrapeSuccess && scraped.title) {
         listing = scraped
         wasScraped = true
-        console.log('[analyze] Scrape successful:', scraped.title)
       } else {
         console.warn('[analyze] Scrape failed, falling back to AI inference:', scraped.scrapeError)
         listing = body

@@ -9,15 +9,16 @@ interface Props {
   photoResults?: PhotoAnalysisResult | null
   photoPreviews?: string[]
   listingUrl?: string
+  plan?: string
   className?: string
 }
 
-export default function PdfLinkInner({ data, photoResults, photoPreviews, listingUrl, className }: Props) {
+export default function PdfLinkInner({ data, photoResults, photoPreviews, listingUrl, plan, className }: Props) {
   const filename = `listingiq-report-${new Date().toISOString().slice(0, 10)}.pdf`
 
   return (
     <PDFDownloadLink
-      document={<ReportDocument data={data} photoResults={photoResults} photoPreviews={photoPreviews} listingUrl={listingUrl} />}
+      document={<ReportDocument data={data} photoResults={photoResults} photoPreviews={photoPreviews} listingUrl={listingUrl} plan={plan} />}
       fileName={filename}
       className={className}
     >
