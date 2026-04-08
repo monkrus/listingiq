@@ -117,12 +117,12 @@ const s = StyleSheet.create({
   footerText: { fontSize: 7, color: C.muted },
 })
 
-function SectionCard({ title, score, children }: { title: string; score: number; children: React.ReactNode }) {
+function SectionCard({ title, score, children, allowWrap }: { title: string; score: number; children: React.ReactNode; allowWrap?: boolean }) {
   const pillBg = score >= 80 ? '#dcfce7' : score >= 60 ? '#fef3c7' : '#fee2e2'
   const pillColor = score >= 80 ? '#166534' : score >= 60 ? '#92400e' : '#991b1b'
   return (
-    <View style={s.sectionCard} wrap={false}>
-      <View style={s.sectionHeader}>
+    <View style={s.sectionCard} wrap={!!allowWrap}>
+      <View style={s.sectionHeader} minPresenceAhead={60}>
         <Text style={s.sectionTitle}>{title}</Text>
         <View style={[s.scorePill, { backgroundColor: pillBg }]}>
           <Text style={[s.scorePillText, { color: pillColor }]}>{score}/100</Text>
@@ -262,7 +262,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
           </SectionCard>
 
           {/* Description */}
-          <SectionCard title="Description quality" score={d.descriptionScore}>
+          <SectionCard title="Description quality" score={d.descriptionScore} allowWrap>
             <ProblemTags items={d.descriptionProblems} />
             <Text style={s.subLabel}>Suggested rewrite — review and edit [bracketed placeholders] before using</Text>
             <View style={s.rewriteBox}><Text style={s.rewriteText}>{d.descriptionRewrite}</Text></View>
@@ -359,7 +359,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
           </SectionCard>
 
           {/* Guest persona */}
-          <SectionCard title="Guest persona match" score={d.personaScore}>
+          <SectionCard title="Guest persona match" score={d.personaScore} allowWrap>
             <View style={{ marginBottom: 10 }}>
               <Text style={[s.rowItemText, { lineHeight: 1.6 }]}>
                 Primary guest type: <Text style={s.boldText}>{d.primaryPersona}</Text>
