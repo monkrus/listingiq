@@ -178,10 +178,13 @@ export async function getCachedReportBySession(sessionId: string): Promise<{
 export async function updateCachedPhotos(sessionId: string, photoResults: object, photoPreviews?: string[] | null): Promise<boolean> {
   const db = getSupabaseAdmin()
   if (!db) return false
+  // Use upsert to handle race condition where cacheReport hasn't finished inserting yet
   const { error } = await db
     .from('cached_reports')
-    .update({ photo_results: photoResults, photo_previews: photoPreviews || null })
-    .eq('session_id', sessionId)
+    .upsert(
+      { session_id: sessionId, photo_results: photoResults, photo_previews: photoPreviews || null },
+      { onConflict: 'session_id', ignoreDuplicates: false }
+    )
   if (error) { console.error('[db] updateCachedPhotos:', error); return false }
   return true
 }
