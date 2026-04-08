@@ -180,6 +180,17 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
     conversionTips: rawData.conversionTips ?? [],
   }
   const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+  // Recalculate overall score with photo weights — must match web report formula
+  const overallScore = photoResults
+    ? Math.round(
+        d.titleScore * 0.17 +
+        d.descriptionScore * 0.22 +
+        photoResults.overallPhotoScore * 0.15 +
+        d.amenityScore * 0.17 +
+        d.personaScore * 0.12 +
+        d.reviewScore * 0.17
+      )
+    : d.overallScore
   const subScores = photoResults
     ? [
         { label: 'Title', v: d.titleScore },
@@ -214,7 +225,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
           {/* Score hero */}
           <View style={s.heroCard}>
             <View style={s.scoreCircle}>
-              <Text style={[s.scoreNumber, { color: scoreColor(d.overallScore) }]}>{d.overallScore}</Text>
+              <Text style={[s.scoreNumber, { color: scoreColor(overallScore) }]}>{overallScore}</Text>
               <Text style={s.scoreLabel}>/ 100</Text>
             </View>
             <View style={{ flex: 1 }}>

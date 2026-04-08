@@ -18,13 +18,14 @@ interface Props {
   initialPhotoPreviews?: string[] | null
 }
 
-function buildTextReport(raw: ReportData, listingUrl?: string): string {
+function buildTextReport(raw: ReportData, listingUrl?: string, photoResults?: PhotoAnalysisResult | null): string {
   const d = {
     ...raw,
     priorityActions: raw.priorityActions ?? [],
     titleProblems: raw.titleProblems ?? [],
     titleSuggestions: raw.titleSuggestions ?? [],
     descriptionProblems: raw.descriptionProblems ?? [],
+    missingPhotos: raw.missingPhotos ?? [],
     topAmenities: raw.topAmenities ?? [],
     amenityGaps: raw.amenityGaps ?? [],
     personaProblems: raw.personaProblems ?? [],
@@ -33,6 +34,17 @@ function buildTextReport(raw: ReportData, listingUrl?: string): string {
     seoKeywords: raw.seoKeywords ?? [],
     conversionTips: raw.conversionTips ?? [],
   }
+  // Recalculate overall score with photo weights — must match web report formula
+  const overallScore = photoResults
+    ? Math.round(
+        d.titleScore * 0.17 +
+        d.descriptionScore * 0.22 +
+        photoResults.overallPhotoScore * 0.15 +
+        d.amenityScore * 0.17 +
+        d.personaScore * 0.12 +
+        d.reviewScore * 0.17
+      )
+    : d.overallScore
   const divider = '─'.repeat(40)
   const lines: string[] = [
     `LISTINGIQ REPORT`,
@@ -40,7 +52,7 @@ function buildTextReport(raw: ReportData, listingUrl?: string): string {
     ...(listingUrl ? [`Listing: ${listingUrl.split('?')[0]}`] : []),
     divider,
     ``,
-    `OVERALL SCORE: ${d.overallScore}/100`,
+    `OVERALL SCORE: ${overallScore}/100`,
     `${d.summary}`,
     `Improvement potential: ${d.estimatedImprovement}`,
     ``,
@@ -68,6 +80,38 @@ function buildTextReport(raw: ReportData, listingUrl?: string): string {
     ``,
     d.descriptionRewrite,
     ``,
+    // Photo analysis (Full Audit) or photo tips (Quick Score)
+    ...(photoResults ? [
+      divider,
+      `AI PHOTO ANALYSIS (${photoResults.overallPhotoScore}/100)`,
+      divider,
+      photoResults.heroSuggestion,
+      ``,
+      ...photoResults.photos.flatMap((p, i) => [
+        `Photo ${i + 1}: ${p.score}/100 — ${p.verdict}`,
+        ...p.strengths.map(s => `  + ${s}`),
+        ...p.problems.map(prob => `  - ${prob}`),
+        ...(p.retakeInstructions ? [`  Retake: ${p.retakeInstructions}`] : []),
+        ``,
+      ]),
+      ...(photoResults.suggestedOrder?.length ? [
+        `Recommended gallery order:`,
+        photoResults.suggestedOrder.map((idx, pos) => `${pos + 1}. Photo ${idx + 1}`).join('  ·  '),
+        ``,
+      ] : []),
+      ...(photoResults.missingShots?.length ? [
+        `Missing high-conversion shots:`,
+        ...photoResults.missingShots.map(s => `  - ${s}`),
+        ``,
+      ] : []),
+    ] : d.missingPhotos.length ? [
+      divider,
+      `PHOTO TIPS`,
+      divider,
+      `Photos top-performing listings in your market include:`,
+      ...d.missingPhotos.map(m => `  - ${m}`),
+      ``,
+    ] : []),
     divider,
     `AMENITIES (${d.amenityScore}/100)`,
     divider,
@@ -81,7 +125,7 @@ function buildTextReport(raw: ReportData, listingUrl?: string): string {
     ...d.personaProblems.map(p => `  - ${p}`),
     `Suggestion: ${d.personaSuggestion}`,
     ``,
-    ...(d.competitorInsight ? [divider, `BEST PRACTICES FROM TOP LISTINGS`, divider, d.competitorInsight, ``] : []),
+    ...(d.competitorInsight ? [divider, `BEST PRACTICES FROM TOP-PERFORMING LISTINGS`, divider, d.competitorInsight, ``] : []),
     divider,
     `REVIEWS (${d.reviewScore}/100)`,
     divider,
@@ -89,14 +133,12 @@ function buildTextReport(raw: ReportData, listingUrl?: string): string {
     ...(d.reviewRisks.length ? [`Watch out for:`, ...d.reviewRisks.map(r => `  - ${r}`)] : []),
     ``,
     divider,
-    `GUEST SEARCH KEYWORDS`,
+    `KEYWORDS & OPTIMIZATION TIPS`,
     divider,
     `Phrases your target guests likely search for — useful for understanding your audience:`,
     d.seoKeywords.join(', '),
     ``,
-    divider,
-    `OPTIMIZATION TIPS`,
-    divider,
+    `Listing optimization tips:`,
     ...d.conversionTips.map((t, i) => `${i + 1}. ${t}`),
     ``,
     divider,
@@ -107,18 +149,19 @@ function buildTextReport(raw: ReportData, listingUrl?: string): string {
   return lines.join('\n')
 }
 
-function CopyReportButton({ data, listingUrl }: { data: ReportData; listingUrl?: string }) {
+function CopyReportButton({ data, listingUrl, photoResults }: { data: ReportData; listingUrl?: string; photoResults?: PhotoAnalysisResult | null }) {
   const [copied, setCopied] = useState(false)
 
   async function handleCopy() {
+    const text = buildTextReport(data, listingUrl, photoResults)
     try {
-      await navigator.clipboard.writeText(buildTextReport(data, listingUrl))
+      await navigator.clipboard.writeText(text)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
       // Fallback for older browsers
       const textarea = document.createElement('textarea')
-      textarea.value = buildTextReport(data, listingUrl)
+      textarea.value = text
       document.body.appendChild(textarea)
       textarea.select()
       document.execCommand('copy')
@@ -261,7 +304,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
               Est. improvement potential: {d.estimatedImprovement}
             </span>
             <DownloadPdfButton data={d} photoResults={photoResults} photoPreviews={photoPreviews} listingUrl={listingUrl} />
-            <CopyReportButton data={d} listingUrl={listingUrl} />
+            <CopyReportButton data={d} listingUrl={listingUrl} photoResults={photoResults} />
           </div>
           <p className="text-xs text-stone-500 mt-2">
             Save your report — download the PDF or copy as text before leaving this page.
@@ -388,8 +431,8 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       {hasPhotoAnalysis && !isDemo && (
         <div className="bg-white border border-stone-200 rounded-2xl p-5 mb-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-stone-800 uppercase tracking-wide flex items-center gap-2">
-              <span className="text-lg">📸</span> AI Photo Analysis
+            <h3 style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-900 flex items-center gap-2">
+              AI Photo Analysis
             </h3>
           </div>
           <PhotoUploader
