@@ -372,7 +372,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
                 </button>
               ) : (
                 <button
-                  onClick={() => window.location.href = `/api/checkout-redirect?plan=full-audit&url=${encodeURIComponent(listingUrl)}&upgrade=1`}
+                  onClick={() => { localStorage.setItem('listingiq_checkout_pending', '1'); window.location.href = `/api/checkout-redirect?plan=full-audit&url=${encodeURIComponent(listingUrl)}&upgrade=1` }}
                   style={{ fontFamily: 'var(--font-syne)' }}
                   className="w-full py-2.5 bg-stone-900 text-white text-xs font-bold rounded-lg hover:bg-stone-700 transition-colors tracking-wide"
                 >
