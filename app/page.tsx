@@ -479,34 +479,32 @@ export default function Home() {
                     key: 'quick-score',
                     name: 'Quick Score',
                     price: '$29',
-                    features: ['Full 7-section audit', 'Title + description rewrites', 'SEO keywords & tips', 'PDF report download'],
+                    features: ['Full 7-section audit', 'Title + description rewrites', 'SEO keywords & tips', 'Priority action plan', 'PDF report download', 'Report sent via email'],
                   },
                   {
                     key: 'full-audit',
                     name: 'Full Audit',
                     price: '$49',
                     popular: true,
-                    features: ['Everything in Quick Score', 'AI photo analysis (10 photos)', 'Photo reorder + retake tips', 'Gallery order suggestion'],
+                    features: ['Everything in Quick Score', 'AI photo analysis (10 photos)', 'Photo reorder + retake tips', 'Gallery order suggestion', 'Report sent via email'],
                   },
                 ].map(p => (
                   <button
                     key={p.key}
                     onClick={() => setSelectedPlan(p.key)}
-                    className={`rounded-xl p-4 text-center text-left transition-all ${
+                    className={`rounded-xl p-4 text-center text-left transition-all flex flex-col ${
                       selectedPlan === p.key
                         ? 'border-2 border-stone-900 bg-stone-50'
                         : 'border border-stone-200 hover:border-stone-400'
                     }`}
                   >
-                    {p.popular && (
-                      <div style={{ fontFamily: 'var(--font-syne)' }} className="text-[10px] font-bold tracking-widest uppercase text-stone-600 mb-1">
-                        Most popular
-                      </div>
-                    )}
+                    <div className={`text-[10px] font-bold tracking-widest uppercase mb-1 ${p.popular ? 'text-stone-600' : 'invisible'}`} style={{ fontFamily: 'var(--font-syne)' }}>
+                      {p.popular ? 'Most popular' : '\u00A0'}
+                    </div>
                     <div style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-900">{p.name}</div>
                     <div style={{ fontFamily: 'var(--font-syne)' }} className="text-2xl font-bold text-stone-900 my-1">{p.price}</div>
                     <div className="text-[11px] text-stone-600 mb-2">one time</div>
-                    <ul className="text-[11px] text-stone-600 space-y-1 text-left">
+                    <ul className="text-[11px] text-stone-600 space-y-1 text-left mt-auto">
                       {p.features.map((f, i) => (
                         <li key={i} className="flex gap-1">
                           <span className="text-green-600 flex-shrink-0">&#10003;</span>{f}
