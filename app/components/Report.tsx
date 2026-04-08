@@ -348,7 +348,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       {plan === 'quick-score' && (
         <div className="bg-white border border-stone-200 rounded-2xl p-6 mt-6">
           <p className="text-xs text-stone-600 uppercase tracking-widest font-bold mb-4 text-center">
-            {isDemo ? 'Get more from ListingIQ' : 'Upgrade your report'}
+            Want more from your analysis?
           </p>
           <div className="max-w-xs mx-auto">
             <div className="rounded-xl p-4 text-center border-2 border-stone-900">
@@ -372,7 +372,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
                 </button>
               ) : (
                 <button
-                  onClick={() => { localStorage.setItem('listingiq_checkout_pending', '1'); window.location.href = `/api/checkout-redirect?plan=full-audit&url=${encodeURIComponent(listingUrl)}&upgrade=1` }}
+                  onClick={() => window.location.href = '/pricing'}
                   style={{ fontFamily: 'var(--font-syne)' }}
                   className="w-full py-2.5 bg-stone-900 text-white text-xs font-bold rounded-lg hover:bg-stone-700 transition-colors tracking-wide"
                 >
@@ -383,7 +383,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
           </div>
           {!isDemo && (
             <p className="text-xs text-stone-600 text-center mt-3">
-              Secure checkout via Stripe · One-time payment
+              Separate purchase · Secure checkout via Stripe
             </p>
           )}
         </div>
