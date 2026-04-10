@@ -8,6 +8,36 @@ import { rateLimit } from '@/app/lib/rate-limit'
 import { useAnalysisCredit } from '@/app/lib/session-usage'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { getCachedReport, setCachedReport } from '@/app/lib/report-cache'
+import { stripe } from '@/app/lib/stripe'
+
+/**
+ * Capture a manually-authorized payment intent. No-op if already captured
+ * or if the PI is missing. Errors are logged but not thrown — the customer
+ * already has their report, and a capture failure is a billing exception
+ * we handle out-of-band via logs.
+ */
+async function capturePaymentIntent(paymentIntentId: string | undefined, alreadyCaptured: boolean | undefined) {
+  if (!paymentIntentId || alreadyCaptured) return
+  try {
+    await stripe.paymentIntents.capture(paymentIntentId)
+  } catch (err) {
+    console.error('[analyze] Failed to capture payment intent:', paymentIntentId, err)
+  }
+}
+
+/**
+ * Cancel a manually-authorized payment intent. Used when the scraper fails
+ * and we couldn't deliver a report. No-op if already captured (can't cancel
+ * a completed charge) or missing.
+ */
+async function cancelPaymentIntent(paymentIntentId: string | undefined, alreadyCaptured: boolean | undefined) {
+  if (!paymentIntentId || alreadyCaptured) return
+  try {
+    await stripe.paymentIntents.cancel(paymentIntentId)
+  } catch (err) {
+    console.error('[analyze] Failed to cancel payment intent:', paymentIntentId, err)
+  }
+}
 
 const USE_MOCK = process.env.USE_MOCK_API === 'true'
 
@@ -315,11 +345,15 @@ export async function POST(req: NextRequest) {
     // Verify payment for non-demo, non-mock requests
     const isDev = process.env.NODE_ENV === 'development'
     let cacheOnly = false
+    let paymentIntentId: string | undefined
+    let alreadyCaptured: boolean | undefined
     if (!isDemo && !USE_MOCK && !isDev) {
       const payment = await verifyPayment(body.sessionId)
       if (!payment.valid) {
         return NextResponse.json({ error: payment.error || 'Payment required' }, { status: 403 })
       }
+      paymentIntentId = payment.paymentIntentId
+      alreadyCaptured = payment.captured
       // Check session usage limits (prevent session ID reuse, allow re-access from email)
       const credit = await useAnalysisCredit(body.sessionId!, payment.plan || plan, { reaccess: body.reaccess })
       if (!credit.allowed) {
@@ -332,6 +366,9 @@ export async function POST(req: NextRequest) {
     if (body.reaccess && body.sessionId) {
       const cached = await getCachedReportBySession(body.sessionId)
       if (cached) {
+        // Safety net: if the initial analysis capture failed (rare), capture
+        // now. No-op if already captured.
+        await capturePaymentIntent(paymentIntentId, alreadyCaptured)
         return NextResponse.json({
           ...cached.reportData,
           cachedPhotoResults: cached.photoResults,
@@ -370,8 +407,13 @@ export async function POST(req: NextRequest) {
 
     // Ensure we have enough data for a meaningful analysis
     if (!listing.title && !listing.description) {
+      // Scrape failed — cancel the authorized payment so the customer is
+      // never charged for a report we can't deliver.
+      await cancelPaymentIntent(paymentIntentId, alreadyCaptured)
       return NextResponse.json(
-        { error: 'Could not access your listing. Please check the URL and try again.' },
+        {
+          error: 'Could not access your listing. Your payment has been cancelled — your card was not charged. Please double-check the URL and try again.',
+        },
         { status: 422 }
       )
     }
@@ -440,6 +482,9 @@ export async function POST(req: NextRequest) {
         console.warn('[analyze] Failed to cache report:', err)
       }
     }
+
+    // Report delivered successfully — capture the authorized payment.
+    await capturePaymentIntent(paymentIntentId, alreadyCaptured)
 
     return NextResponse.json({ ...report, wasScraped, plan, photoUrls })
   } catch (err) {

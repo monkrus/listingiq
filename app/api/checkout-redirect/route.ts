@@ -31,6 +31,10 @@ export async function GET(req: NextRequest) {
       cancel_url: `${origin}${listingUrl ? `/?url=${encodeURIComponent(listingUrl)}` : '/pricing'}`,
       metadata: { planKey: plan, listingUrl, ...(uploadId ? { photoUploadId: uploadId } : {}) },
       allow_promotion_codes: true,
+      // Manual capture: card is authorized on payment, but only captured after
+      // a successful listing analysis. If scrape fails, we cancel the PI and
+      // the customer is never charged.
+      payment_intent_data: { capture_method: 'manual' },
     })
 
     return NextResponse.redirect(session.url!)

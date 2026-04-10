@@ -11,7 +11,14 @@ export async function GET(req: NextRequest) {
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId)
 
-    if (session.payment_status === 'paid') {
+    // Accept both captured ('paid') and authorized-but-not-yet-captured
+    // ('unpaid' with a payment_intent) — manual capture flow authorizes
+    // the card at checkout and only captures after a successful analysis.
+    const isCaptured = session.payment_status === 'paid'
+    const isAuthorized = session.payment_status === 'unpaid' && !!session.payment_intent
+    const isComplete = session.status === 'complete'
+
+    if (isComplete && (isCaptured || isAuthorized)) {
       return NextResponse.json({
         verified: true,
         plan: session.metadata?.planKey || 'quick-score',
