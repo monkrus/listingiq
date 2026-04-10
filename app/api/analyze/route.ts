@@ -144,6 +144,9 @@ VERIFY BEFORE RECOMMENDING — do NOT recommend what already exists:
 - TITLE SUGGESTIONS must reflect the actual property data. Guest capacity in titles MUST match the bed count from the description/amenities. Do not guess or round up capacity.
 
 - TITLE SUGGESTIONS must each be UNDER 50 characters. Airbnb truncates titles on mobile search cards at ~50 chars. Count carefully before submitting.
+- TITLE SUGGESTIONS must NOT include the city, neighbourhood, or district name (e.g. "Old Town", "Soho", "Tallinn"). Airbnb already shows location as structured metadata next to every listing, so repeating it in the title wastes characters that should go to unique differentiators (property features, era, view, vibe). This rule is absolute even if the existing title uses a location phrase — the whole point of suggesting a new title is to recover that wasted space.
+- TITLE SUGGESTIONS must be internally consistent with titleProblems. If a titleProblem says a phrase is redundant or wasteful (e.g. "the neighbourhood name is redundant"), your suggestions MUST NOT contain that phrase. Contradicting your own critique destroys trust.
+- TITLE SUGGESTIONS should use the full 50-character budget where possible. A 25-character title leaves conversion real estate on the table. Pack in concrete differentiators (property type, era, standout feature, vibe, capacity) up to the limit.
 - DESCRIPTION REWRITE must calculate guest capacity correctly: a double/queen/king bed sleeps 2, a single/twin bed sleeps 1, a sofa bed sleeps 1-2. Add them up accurately.
 - DESCRIPTION REWRITE must NOT assume facts about the property that aren't in the provided data (e.g., don't say "hot tub under the stars" unless you know it's outdoors and uncovered). If you don't know a detail, omit it or use a placeholder like [your hot tub].
 - DESCRIPTION REWRITE must NOT disparage hotels or competitors. Position the listing on its own strengths.
@@ -324,6 +327,15 @@ Provide a detailed, actionable optimization report. Be specific — reference th
 }
 
 export async function POST(req: NextRequest) {
+  // Hoisted so the outer catch / finally can release the authorization
+  // even if we fail before reaching an explicit capture/cancel call.
+  let paymentIntentId: string | undefined
+  let alreadyCaptured: boolean | undefined
+  // Flipped to true after we explicitly capture (delivery) or cancel (failure).
+  // If we fall out of the try with settled === false, the finally cancels the
+  // authorization so the customer's card hold is released immediately instead
+  // of sitting for ~7 days until Stripe auto-voids it.
+  let settled = false
   try {
     // Origin check — reject requests from external sites
     const originBlock = checkOrigin(req)
@@ -345,8 +357,6 @@ export async function POST(req: NextRequest) {
     // Verify payment for non-demo, non-mock requests
     const isDev = process.env.NODE_ENV === 'development'
     let cacheOnly = false
-    let paymentIntentId: string | undefined
-    let alreadyCaptured: boolean | undefined
     if (!isDemo && !USE_MOCK && !isDev) {
       const payment = await verifyPayment(body.sessionId)
       if (!payment.valid) {
@@ -369,6 +379,7 @@ export async function POST(req: NextRequest) {
         // Safety net: if the initial analysis capture failed (rare), capture
         // now. No-op if already captured.
         await capturePaymentIntent(paymentIntentId, alreadyCaptured)
+        settled = true
         return NextResponse.json({
           ...cached.reportData,
           cachedPhotoResults: cached.photoResults,
@@ -383,6 +394,7 @@ export async function POST(req: NextRequest) {
 
     // Return mock data for demo or when USE_MOCK_API is enabled
     if (isDemo || USE_MOCK) {
+      settled = true // no paymentIntentId in these modes — nothing to release
       return NextResponse.json({
         ...MOCK_REPORT,
         estimatedImprovement: estimateImprovement(MOCK_REPORT.overallScore),
@@ -410,6 +422,7 @@ export async function POST(req: NextRequest) {
       // Scrape failed — cancel the authorized payment so the customer is
       // never charged for a report we can't deliver.
       await cancelPaymentIntent(paymentIntentId, alreadyCaptured)
+      settled = true
       return NextResponse.json(
         {
           error: 'Could not access your listing. Your payment has been cancelled — your card was not charged. Please double-check the URL and try again.',
@@ -423,6 +436,11 @@ export async function POST(req: NextRequest) {
     if (!body.isDemo && listingUrl) {
       const cached = getCachedReport(listingUrl, plan)
       if (cached) {
+        // Cache hit is still a successful delivery — capture the authorization
+        // so we get paid, otherwise the finally block would release the hold
+        // and the customer would receive a free report.
+        await capturePaymentIntent(paymentIntentId, alreadyCaptured)
+        settled = true
         return NextResponse.json(cached)
       }
     }
@@ -485,10 +503,21 @@ export async function POST(req: NextRequest) {
 
     // Report delivered successfully — capture the authorized payment.
     await capturePaymentIntent(paymentIntentId, alreadyCaptured)
+    settled = true
 
     return NextResponse.json({ ...report, wasScraped, plan, photoUrls })
   } catch (err) {
     console.error('[analyze] Error:', err)
     return NextResponse.json({ error: 'Analysis failed. Check your API key and try again.' }, { status: 500 })
+  } finally {
+    // Safety net: if we exit the handler without an explicit capture/cancel,
+    // release the authorization so the customer's card hold is dropped
+    // immediately. Covers the inner Claude API catch (502), validation/JSON
+    // throws caught by the outer catch (500), and any future return path
+    // that forgets to settle. No-op when paymentIntentId is undefined
+    // (demo / mock / dev / payment-verify-early-exit).
+    if (!settled) {
+      await cancelPaymentIntent(paymentIntentId, alreadyCaptured)
+    }
   }
 }

@@ -1,13 +1,14 @@
 {
   "name": "listingiq",
-  "version": "1.0.68",
+  "version": "1.0.69",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify:capture": "node scripts/verify-manual-capture.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",

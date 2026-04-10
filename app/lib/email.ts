@@ -32,7 +32,7 @@ export async function sendReceiptEmail(opts: {
       replyTo: 'support@listingiq.pro',
       to: opts.to,
       subject: `Your ListingIQ ${planName} report is ready`,
-      text: `Your ListingIQ ${planName} Report is Ready\n\nThanks for your purchase! Your ${planName} (${planPrice}) analysis is complete.\n\nView your report: ${reportUrl}\n\nImportant: Download the PDF or copy the report text. Reports are generated on-demand and not stored permanently.\n\n© ${new Date().getFullYear()} ListingIQ`,
+      text: `Your ListingIQ ${planName} Report is Ready\n\nThanks for your purchase! Your ${planName} (${planPrice}) analysis is complete.\n\nView your report: ${reportUrl}\n\nTip: Download the PDF from the results page if you'd like an offline copy.\n\n© ${new Date().getFullYear()} ListingIQ`,
       html: `
 <!DOCTYPE html>
 <html>
@@ -69,7 +69,7 @@ export async function sendReceiptEmail(opts: {
                 </tr>
               </table>
               <p style="margin:0 0 16px;color:#57534e;font-size:14px;line-height:1.6;">
-                <strong>Important:</strong> Download the PDF or copy the report text from the results page. Reports are generated on-demand and not stored permanently.
+                <strong>Tip:</strong> Download the PDF from the results page if you'd like an offline copy to share or keep.
               </p>
               ${opts.plan === 'full-audit' ? `
               <p style="margin:0 0 16px;color:#57534e;font-size:14px;line-height:1.6;">
