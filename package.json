@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "playwright:install": "npx playwright install chromium --with-deps",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -17,7 +16,6 @@
     "@supabase/supabase-js": "^2.43.0",
     "apify-client": "^2.22.3",
     "next": "^14.2.35",
-    "playwright": "^1.44.0",
     "react": "^18",
     "react-dom": "^18",
     "resend": "^6.10.0",
