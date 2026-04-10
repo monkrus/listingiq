@@ -15,8 +15,11 @@ export function checkOrigin(req: NextRequest): NextResponse | null {
   const referer = req.headers.get('referer')
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
 
-  // If no base URL configured, allow (can't validate)
-  if (!baseUrl) return null
+  // Fail closed: if no base URL is configured in production, block all requests
+  if (!baseUrl) {
+    console.error('[check-origin] NEXT_PUBLIC_BASE_URL not configured — blocking request. Set this env var to your production URL.')
+    return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
+  }
 
   const allowed = new URL(baseUrl).origin
 

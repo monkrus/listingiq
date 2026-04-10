@@ -193,6 +193,29 @@ export async function updateCachedPhotos(sessionId: string, photoResults: object
   return true
 }
 
+/** Mark that the report email has been sent for this session (durable dedup) */
+export async function markEmailSent(sessionId: string): Promise<void> {
+  const db = getSupabaseAdmin()
+  if (!db) return
+  const { error } = await db
+    .from('cached_reports')
+    .update({ email_sent_at: new Date().toISOString() })
+    .eq('session_id', sessionId)
+  if (error) console.warn('[db] markEmailSent:', error)
+}
+
+/** Check if report email was already sent for this session */
+export async function isEmailSent(sessionId: string): Promise<boolean> {
+  const db = getSupabaseAdmin()
+  if (!db) return false
+  const { data } = await db
+    .from('cached_reports')
+    .select('email_sent_at')
+    .eq('session_id', sessionId)
+    .single()
+  return !!(data?.email_sent_at)
+}
+
 export async function getReportsThisMonth(userId: string): Promise<number> {
   const db = getSupabaseAdmin()
   if (!db) return 0

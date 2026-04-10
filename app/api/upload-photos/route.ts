@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/app/lib/rate-limit'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { storePhotos } from '@/app/lib/photo-store'
+import { validateImageFile } from '@/app/lib/validate-image'
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,12 +43,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Total upload size exceeds 20 MB.' }, { status: 400 })
     }
 
-    // Convert to base64 and store
+    // Validate magic bytes and convert to base64
     const photos = await Promise.all(files.map(async (file) => {
+      let realType: string
+      try {
+        realType = await validateImageFile(file)
+      } catch (err) {
+        throw new Error(err instanceof Error ? err.message : `${file.name} is not a valid image`)
+      }
       const bytes = await file.arrayBuffer()
       return {
         base64: Buffer.from(bytes).toString('base64'),
-        mediaType: file.type || 'image/jpeg',
+        mediaType: realType,
         filename: file.name,
       }
     }))

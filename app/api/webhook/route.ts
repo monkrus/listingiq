@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/app/lib/stripe'
 import { getSupabaseAdmin } from '@/app/lib/supabase'
 import { registerPaidSession } from '@/app/lib/session-usage'
-import { sendReceiptEmail } from '@/app/lib/email'
 import Stripe from 'stripe'
 
 export const runtime = 'nodejs'
@@ -32,15 +31,10 @@ export async function POST(req: NextRequest) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session
         const planKey = session.metadata?.planKey || 'quick-score'
-        const email = session.customer_details?.email || session.metadata?.email
         // Register the session in our usage tracker so the API routes can validate it
         registerPaidSession(session.id, planKey)
-
-        // Send receipt email (fire-and-forget — don't block webhook response)
-        if (email) {
-          sendReceiptEmail({ to: email, plan: planKey, sessionId: session.id })
-            .catch(err => console.warn('[webhook] Email send failed:', err))
-        }
+        // Email is sent later by the client after the report is fully cached
+        // (via /api/send-report-email) to avoid sending before the report exists
 
         // Add credits if Supabase is configured and we can identify the user
         const db = getSupabaseAdmin()

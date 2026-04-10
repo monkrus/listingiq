@@ -83,15 +83,17 @@ async function markUsedInStripe(sessionId: string, field: 'analyze_used' | 'phot
 
 /**
  * Check and consume an analysis credit for this session.
+ * Returns cacheOnly: true when reaccess is granted for an already-used credit —
+ * the caller MUST only return cached data and not trigger a new API call.
  */
-export async function useAnalysisCredit(sessionId: string, plan: string, opts?: { reaccess?: boolean }): Promise<{ allowed: boolean; error?: string }> {
+export async function useAnalysisCredit(sessionId: string, plan: string, opts?: { reaccess?: boolean }): Promise<{ allowed: boolean; cacheOnly?: boolean; error?: string }> {
   const usage = await ensureSessionFromStripe(sessionId, plan)
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['quick-score']
 
   if (usage.analyzeCount >= limits.analyze) {
-    // Allow re-access from email link (same session, same listing)
+    // Allow re-access from email link — but only for cached data
     if (opts?.reaccess) {
-      return { allowed: true }
+      return { allowed: true, cacheOnly: true }
     }
     return { allowed: false, error: 'This payment session has already been used for an analysis. Please purchase a new report.' }
   }
@@ -103,8 +105,9 @@ export async function useAnalysisCredit(sessionId: string, plan: string, opts?: 
 
 /**
  * Check and consume a photo analysis credit for this session.
+ * Returns cacheOnly: true when reaccess is granted for an already-used credit.
  */
-export async function usePhotoCredit(sessionId: string, plan: string): Promise<{ allowed: boolean; error?: string }> {
+export async function usePhotoCredit(sessionId: string, plan: string, opts?: { reaccess?: boolean }): Promise<{ allowed: boolean; cacheOnly?: boolean; error?: string }> {
   const usage = await ensureSessionFromStripe(sessionId, plan)
   const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['quick-score']
 
@@ -113,6 +116,10 @@ export async function usePhotoCredit(sessionId: string, plan: string): Promise<{
   }
 
   if (usage.photoCount >= limits.photo) {
+    // Allow re-access — but only for cached data
+    if (opts?.reaccess) {
+      return { allowed: true, cacheOnly: true }
+    }
     return { allowed: false, error: 'Photo analysis has already been used for this session. Please purchase a new report.' }
   }
 

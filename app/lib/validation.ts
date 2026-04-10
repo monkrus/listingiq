@@ -17,3 +17,24 @@ export function isValidAirbnbUrl(url: string): boolean {
     return false
   }
 }
+
+/** Allowed hostnames for Airbnb photo CDN URLs (SSRF prevention) */
+const ALLOWED_PHOTO_HOSTS = [
+  'a0.muscache.com',
+  'a1.muscache.com',
+  'a2.muscache.com',
+]
+
+/**
+ * Validate that a URL points to an Airbnb photo CDN.
+ * Prevents SSRF by rejecting URLs to internal/arbitrary hosts.
+ */
+export function isValidPhotoUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'https:') return false
+    return ALLOWED_PHOTO_HOSTS.includes(u.hostname)
+  } catch {
+    return false
+  }
+}

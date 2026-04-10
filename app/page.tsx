@@ -46,9 +46,25 @@ export default function Home() {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [initialPhotoResults, setInitialPhotoResults] = useState<PhotoAnalysisResult | null>(null)
   const [initialPhotoPreviews, setInitialPhotoPreviews] = useState<string[] | null>(null)
+  const [autoAnalyzingPhotos, setAutoAnalyzingPhotos] = useState(false)
+  // Hydrating: true while useEffect resolves a returning user (email re-access or saved report).
+  // Prevents the input form from flashing for 1-2s before the report renders.
+  const [hydrating, setHydrating] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('paid') === '1') return true
+    if (params.get('demo')) return true
+    if (params.get('new') === '1') return false
+    try {
+      return !!localStorage.getItem('listingiq_report')
+    } catch {
+      return false
+    }
+  })
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
+    const finishHydrating = () => setHydrating(false)
 
     // Returning from Stripe payment or email re-access
     if (params.get('paid') === '1') {
@@ -59,19 +75,32 @@ export default function Home() {
       }
       const isCheckout = params.get('checkout') === '1'
 
-      // Check for saved report — reuse if same plan (don't show Quick Score for Full Audit)
-      const savedPlan = localStorage.getItem('listingiq_plan')
-      const saved = localStorage.getItem('listingiq_report')
-      if (saved && savedPlan === planParam) {
-        try {
-          setReport(JSON.parse(saved))
-          // Restore photo results from localStorage
-          const savedPhotos = localStorage.getItem('listingiq_photo_results')
-          const savedPreviews = localStorage.getItem('listingiq_photo_previews')
-          if (savedPhotos) setInitialPhotoResults(JSON.parse(savedPhotos))
-          if (savedPreviews) setInitialPhotoPreviews(JSON.parse(savedPreviews))
-          return
-        } catch {}
+      // Reuse saved report for email re-access on same browser (not fresh checkout)
+      if (!isCheckout) {
+        const savedPlan = localStorage.getItem('listingiq_plan')
+        const saved = localStorage.getItem('listingiq_report')
+        if (saved && savedPlan === planParam) {
+          try {
+            const parsedReport = JSON.parse(saved) as ReportData
+            setReport(parsedReport)
+            finishHydrating()
+            // Restore photo results from localStorage
+            const savedPhotos = localStorage.getItem('listingiq_photo_results')
+            const savedPreviews = localStorage.getItem('listingiq_photo_previews')
+            if (savedPhotos) {
+              setInitialPhotoResults(JSON.parse(savedPhotos))
+              if (savedPreviews) setInitialPhotoPreviews(JSON.parse(savedPreviews))
+            } else if (savedPlan === 'full-audit') {
+              // Photos missing (original analysis failed) — auto-analyze from listing photos
+              const sid = localStorage.getItem('listingiq_session_id')
+              const photoUrls = parsedReport.photoUrls || (parsedReport as any).photoUrls
+              if (sid && photoUrls?.length) {
+                autoAnalyzePhotos(photoUrls, sid, parsedReport)
+              }
+            }
+            return
+          } catch {}
+        }
       }
 
       const urlParam = params.get('url')
@@ -93,14 +122,29 @@ export default function Home() {
             const cacheRes = await fetch(`/api/cached-report?session_id=${encodeURIComponent(sid)}`)
             const cacheData = await cacheRes.json()
             if (cacheData.found) {
-              setReport(cacheData.reportData as any)
+              const reportData = cacheData.reportData as ReportData
+              setReport(reportData)
+              finishHydrating()
               const cachedPlan = cacheData.plan || planParam || 'quick-score'
               setActivePlan(cachedPlan)
               const cachedUrl = cacheData.listingUrl || cacheData.reportData?.listingUrl || ''
               if (cachedUrl) setUrl(cachedUrl)
-              if (cacheData.photoResults) setInitialPhotoResults(cacheData.photoResults)
-              if (cacheData.photoPreviews) setInitialPhotoPreviews(cacheData.photoPreviews)
-              localStorage.setItem('listingiq_report', JSON.stringify(cacheData.reportData))
+              if (cacheData.photoResults) {
+                setInitialPhotoResults(cacheData.photoResults)
+                if (cacheData.photoPreviews) setInitialPhotoPreviews(cacheData.photoPreviews)
+                // Safety net: send email if original tab closed before it was sent
+                sendReportEmail(sid)
+              } else if (cachedPlan === 'full-audit') {
+                // Photos not cached yet — auto-analyze from listing photos
+                const photoUrls = reportData.photoUrls || (reportData as any).photoUrls
+                if (photoUrls?.length) {
+                  autoAnalyzePhotos(photoUrls, sid, reportData)
+                }
+              } else {
+                // Quick Score re-access (no photos needed) — ensure email was sent
+                sendReportEmail(sid)
+              }
+              localStorage.setItem('listingiq_report', JSON.stringify(reportData))
               localStorage.setItem('listingiq_plan', cachedPlan)
               if (cachedUrl) localStorage.setItem('listingiq_url', cachedUrl)
               if (cacheData.photoResults) localStorage.setItem('listingiq_photo_results', JSON.stringify(cacheData.photoResults))
@@ -116,7 +160,10 @@ export default function Home() {
             if (photoUploadParam) {
               setPhotoUploadId(photoUploadParam)
             }
+            finishHydrating()
             analyze({ url: savedUrl, reaccess: true }, photoUploadParam || null, planParam || 'quick-score')
+          } else {
+            finishHydrating()
           }
         })()
         return
@@ -130,7 +177,10 @@ export default function Home() {
         if (photoUploadParam) {
           setPhotoUploadId(photoUploadParam)
         }
+        finishHydrating()
         analyze({ url: savedUrl, reaccess: false }, photoUploadParam || null, planParam || 'quick-score')
+      } else {
+        finishHydrating()
       }
       return
     }
@@ -141,12 +191,16 @@ export default function Home() {
       setActivePlan(demoPlan)
       setIsPaid(true)
       setIsDemo(true)
+      finishHydrating()
       analyze(DEMO_LISTING, null, demoPlan)
       return
     }
 
     // Skip localStorage restore when opened in new tab via right-click
-    if (params.get('new') === '1') return
+    if (params.get('new') === '1') {
+      finishHydrating()
+      return
+    }
 
     // Restore saved report from localStorage (returning user, tab was closed)
     const savedReport = localStorage.getItem('listingiq_report')
@@ -156,6 +210,7 @@ export default function Home() {
         setReport(parsed)
         const savedUrl = localStorage.getItem('listingiq_url')
         if (savedUrl) setUrl(savedUrl)
+        finishHydrating()
         return
       } catch {}
     }
@@ -163,6 +218,7 @@ export default function Home() {
     // Restore URL from query param (e.g. cancel redirect)
     const urlParam = params.get('url')
     if (urlParam) setUrl(urlParam)
+    finishHydrating()
   }, [])
 
   function savePhotoResultsToStorage(photoResults: PhotoAnalysisResult, photoPreviews?: string[] | null) {
@@ -170,6 +226,45 @@ export default function Home() {
       localStorage.setItem('listingiq_photo_results', JSON.stringify(photoResults))
       if (photoPreviews) localStorage.setItem('listingiq_photo_previews', JSON.stringify(photoPreviews))
     } catch {}
+  }
+
+  /** Trigger email after report is fully cached (text + photos). Fire-and-forget. */
+  function sendReportEmail(sessionId: string) {
+    fetch('/api/send-report-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    }).catch(err => console.warn('[email] Failed to trigger report email:', err))
+  }
+
+  /** Auto-analyze listing photos for email re-access when photos aren't cached yet. */
+  async function autoAnalyzePhotos(photoUrls: string[], sessionId: string, reportData: ReportData) {
+    setAutoAnalyzingPhotos(true)
+    try {
+      const listingContext = {
+        title: reportData.titleSuggestions?.[0] || '',
+        amenities: (reportData as any).amenityHaves || [],
+        missingPhotos: reportData.missingPhotos || [],
+      }
+      const photoRes = await fetch('/api/analyze-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photoUrls, sessionId, listingContext, reaccess: true }),
+      })
+      if (photoRes.ok) {
+        const photoData = await photoRes.json()
+        setInitialPhotoResults(photoData)
+        const previews = photoData.previews || null
+        if (previews) setInitialPhotoPreviews(previews)
+        savePhotoResultsToStorage(photoData, previews)
+        // Photos now cached — safe to send email
+        sendReportEmail(sessionId)
+      }
+    } catch (err) {
+      console.warn('[autoAnalyzePhotos] Failed:', err)
+    } finally {
+      setAutoAnalyzingPhotos(false)
+    }
   }
 
   async function animateSteps(withPhotos: boolean) {
@@ -187,6 +282,7 @@ export default function Home() {
     setReport(null)
     setInitialPhotoResults(null)
     setInitialPhotoPreviews(null)
+    setAutoAnalyzingPhotos(false)
 
     const plan = planOverride || activePlan
     // Check for user-uploaded photos
@@ -222,13 +318,14 @@ export default function Home() {
             }
 
             let photoRes: Response | null = null
+            const isReaccess = !!payload.reaccess
 
             // Priority 1: Try server-side photo store (user uploaded before payment)
             if (uploadId) {
               photoRes = await fetch('/api/analyze-photos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uploadId, sessionId, listingContext }),
+                body: JSON.stringify({ uploadId, sessionId, listingContext, reaccess: isReaccess }),
               })
             }
 
@@ -250,7 +347,7 @@ export default function Home() {
               photoRes = await fetch('/api/analyze-photos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ photoUrls: data.photoUrls, sessionId, listingContext }),
+                body: JSON.stringify({ photoUrls: data.photoUrls, sessionId, listingContext, reaccess: isReaccess }),
               })
             }
 
@@ -292,6 +389,13 @@ export default function Home() {
       if (!isDemo) {
         localStorage.setItem('listingiq_report', JSON.stringify(data))
         localStorage.setItem('listingiq_plan', plan)
+        // Send email after all analysis is attempted (text always, photos if Full Audit).
+        // Send even if photos failed — text report is cached, and email re-access
+        // will auto-analyze photos via autoAnalyzePhotos() if they're missing.
+        const sid = localStorage.getItem('listingiq_session_id')
+        if (sid && !payload.reaccess) {
+          sendReportEmail(sid)
+        }
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
@@ -392,6 +496,14 @@ export default function Home() {
     localStorage.removeItem('listingiq_photo_previews')
   }
 
+  // Hydrating: returning user (email re-access, saved report, demo) — show a minimal
+  // loading placeholder instead of the input form to avoid a flash before the report mounts.
+  if (hydrating && !report) return (
+    <main className="min-h-screen flex items-center justify-center" style={{ background: '#F7F6F3' }}>
+      <div className="w-10 h-10 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin" />
+    </main>
+  )
+
   // Report view
   if (report) return (
     <main className="min-h-screen py-12" style={{ background: '#F7F6F3' }}>
@@ -411,6 +523,7 @@ export default function Home() {
         listingUrl={url}
         initialPhotoResults={initialPhotoResults}
         initialPhotoPreviews={initialPhotoPreviews}
+        autoAnalyzingPhotos={autoAnalyzingPhotos}
       />
     </main>
   )

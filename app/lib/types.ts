@@ -26,6 +26,7 @@ export interface ReportData {
   priorityActions: string[]
   competitorInsight: string
   wasScraped?: boolean
+  photoUrls?: string[]
 }
 
 export interface ListingInput {
