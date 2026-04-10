@@ -448,13 +448,19 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
 
 /**
  * Main scraper entry point.
- * 1. Apify (most reliable at scale — requires actor rental on Apify account)
+ * 1. Apify (most reliable at scale — DORMANT until APIFY_ENABLED=true is set)
  * 2. API-based (Airbnb public GraphQL — current primary in production)
  * 3. HTML fetch fallback (catches API endpoint failures)
+ *
+ * To activate Apify: rent the tri_angle/airbnb-scraper actor on your Apify
+ * account, then set APIFY_ENABLED=true in Railway env vars. The token
+ * (APIFY_API_TOKEN) can stay set while dormant — this gate prevents wasted
+ * API calls + latency that would happen on every scrape if the actor isn't
+ * rented yet.
  */
 export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> {
-  // Try Apify first (most reliable at scale)
-  if (process.env.APIFY_API_TOKEN) {
+  // Tier 1: Apify — only active when explicitly enabled
+  if (process.env.APIFY_ENABLED === 'true' && process.env.APIFY_API_TOKEN) {
     const apifyResult = await apifyScrape(url)
     if (apifyResult.scrapeSuccess) {
       return apifyResult
