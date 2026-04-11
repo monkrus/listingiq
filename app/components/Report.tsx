@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { ReportData } from '@/app/lib/types'
 import { PhotoAnalysisResult } from '@/app/api/analyze-photos/route'
 import ScoreCircle from './ScoreCircle'
+import { estimateImprovement } from '@/app/lib/estimate-improvement'
 import { APP_VERSION } from '@/app/lib/version'
 import ReportSection from './ReportSection'
 import DownloadPdfButton from './DownloadPdfButton'
@@ -87,6 +88,9 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
         d.reviewScore * 0.17
       )
     : d.overallScore
+  // Recalculate improvement text to match the displayed overall score
+  // (server computes it from 5-score average, but Full Audit displays 6-score weighted average)
+  const improvementText = (photoResults || isDemo) ? estimateImprovement(overallScore) : d.estimatedImprovement
   const subScores = hasPhotoAnalysis
     ? [
         { label: 'Title', v: d.titleScore },
@@ -138,7 +142,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
           <p className="text-sm text-stone-600 mb-3 leading-relaxed">{d.summary}</p>
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-block bg-green-100 text-green-800 text-sm font-medium px-3 py-1.5 rounded-lg">
-              Est. improvement potential: {d.estimatedImprovement}
+              Est. improvement potential: {improvementText}
             </span>
             <DownloadPdfButton data={d} photoResults={photoResults} photoPreviews={photoPreviews} listingUrl={listingUrl} plan={plan} />
           </div>

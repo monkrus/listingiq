@@ -242,8 +242,8 @@ export default function Home() {
     setAutoAnalyzingPhotos(true)
     try {
       const listingContext = {
-        title: reportData.titleSuggestions?.[0] || '',
-        amenities: (reportData as any).amenityHaves || [],
+        title: reportData.summary || '',
+        amenities: reportData.topAmenities || [],
         missingPhotos: reportData.missingPhotos || [],
       }
       const photoRes = await fetch('/api/analyze-photos', {
@@ -312,8 +312,8 @@ export default function Home() {
         } else {
           try {
             const listingContext = {
-              title: data.titleSuggestions?.[0] || '',
-              amenities: data.amenityHaves || [],
+              title: data.summary || '',
+              amenities: data.topAmenities || [],
               missingPhotos: data.missingPhotos || [],
             }
 

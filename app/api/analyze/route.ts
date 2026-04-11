@@ -9,6 +9,7 @@ import { useAnalysisCredit } from '@/app/lib/session-usage'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { getCachedReport, setCachedReport } from '@/app/lib/report-cache'
 import { stripe } from '@/app/lib/stripe'
+import { estimateImprovement } from '@/app/lib/estimate-improvement'
 
 /**
  * Capture a manually-authorized payment intent. No-op if already captured
@@ -187,17 +188,6 @@ Required schema (use realistic scores, not perfect ones):
   "conversionTips": ["<tip1>", "<tip2>", "<tip3>", "<tip4>", "<tip5>"] — actionable tips based on the actual listing text and known Airbnb best practices
 }`
 
-/** Qualitative improvement potential based on score.
- *  Lower scores = more room for improvement.
- *  Avoids fake percentages — actual impact depends on market, pricing, season, etc. */
-function estimateImprovement(score: number): string {
-  if (score >= 90) return 'Low — your listing is already well-optimized'
-  if (score >= 80) return 'Moderate — a few targeted changes could help'
-  if (score >= 70) return 'Good — meaningful gains from the changes below'
-  if (score >= 60) return 'High — significant room for improvement'
-  if (score >= 50) return 'Very high — these changes could make a real difference'
-  return 'Substantial — your listing has major opportunities'
-}
 
 /**
  * Post-processing validation: catches AI errors before sending to client.
@@ -434,13 +424,24 @@ export async function POST(req: NextRequest) {
     // Check cache — return identical result for same listing + plan within 24h
     const listingUrl = body.url || ''
     if (!body.isDemo && listingUrl) {
-      const cached = getCachedReport(listingUrl, plan)
+      const cached = getCachedReport(listingUrl, plan) as Record<string, unknown> | null
       if (cached) {
         // Cache hit is still a successful delivery — capture the authorization
         // so we get paid, otherwise the finally block would release the hold
         // and the customer would receive a free report.
         await capturePaymentIntent(paymentIntentId, alreadyCaptured)
         settled = true
+        // CRITICAL: persist to Supabase on cache hit too. Without this,
+        // email re-access fails for any buyer whose report came from the LRU
+        // cache (silent "no row" for updateCachedPhotos, customer sees upload
+        // dropzone instead of their paid photos).
+        if (body.sessionId) {
+          try {
+            await cacheReport(body.sessionId, plan, listingUrl, cached)
+          } catch (err) {
+            console.error('[analyze] Failed to cache LRU-hit report to Supabase:', err)
+          }
+        }
         return NextResponse.json(cached)
       }
     }
@@ -471,11 +472,6 @@ export async function POST(req: NextRequest) {
     report = validateReport(report, listing)
     report.estimatedImprovement = estimateImprovement(report.overallScore as number)
 
-    // Cache the validated report
-    if (!body.isDemo && listingUrl) {
-      setCachedReport(listingUrl, plan, report)
-    }
-
     // Save to Supabase if user is authenticated
     if (body.userId) {
       await saveReport(
@@ -489,11 +485,18 @@ export async function POST(req: NextRequest) {
 
     // Include photo URLs so client can auto-analyze listing photos for Full Audit
     const photoUrls = listing.photoUrls?.length ? listing.photoUrls : undefined
+    const fullReport = { ...report, wasScraped, plan, photoUrls, listingUrl }
+
+    // Cache the full response (LRU). Cache the SAME shape we return so cache
+    // hits deliver identical data (previously the cache stored just `report`
+    // without photoUrls, breaking Full Audit cache hits).
+    if (!body.isDemo && listingUrl) {
+      setCachedReport(listingUrl, plan, fullReport)
+    }
 
     // Cache report in Supabase for email re-access (awaited so cache is ready
     // before response — prevents race where email re-access finds empty cache)
     if (body.sessionId && !body.isDemo) {
-      const fullReport = { ...report, wasScraped, plan, photoUrls, listingUrl }
       try {
         await cacheReport(body.sessionId, plan, listingUrl, fullReport)
       } catch (err) {
@@ -505,7 +508,7 @@ export async function POST(req: NextRequest) {
     await capturePaymentIntent(paymentIntentId, alreadyCaptured)
     settled = true
 
-    return NextResponse.json({ ...report, wasScraped, plan, photoUrls })
+    return NextResponse.json(fullReport)
   } catch (err) {
     console.error('[analyze] Error:', err)
     return NextResponse.json({ error: 'Analysis failed. Check your API key and try again.' }, { status: 500 })

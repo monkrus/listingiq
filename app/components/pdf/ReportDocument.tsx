@@ -9,6 +9,7 @@ import {
 } from '@react-pdf/renderer'
 import { ReportData } from '@/app/lib/types'
 import { PhotoAnalysisResult } from '@/app/api/analyze-photos/route'
+import { estimateImprovement } from '@/app/lib/estimate-improvement'
 
 Font.register({
   family: 'Syne',
@@ -193,6 +194,8 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
     : d.overallScore
   const hasPhotoAnalysis = plan === 'full-audit'
   const photoScoreValue = photoResults ? photoResults.overallPhotoScore : null
+  // Recalculate improvement text to match displayed overall score
+  const improvementText = photoResults ? estimateImprovement(overallScore) : d.estimatedImprovement
   const subScores: { label: string; v: number | null }[] = hasPhotoAnalysis
     ? [
         { label: 'Title', v: d.titleScore },
@@ -234,7 +237,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
               <Text style={s.heroTitle}>Airbnb listing score</Text>
               <Text style={s.heroSummary}>{d.summary}</Text>
               <View style={s.improvementPill}>
-                <Text style={s.improvementText}>Est. improvement potential: {d.estimatedImprovement}</Text>
+                <Text style={s.improvementText}>Est. improvement potential: {improvementText}</Text>
               </View>
             </View>
           </View>

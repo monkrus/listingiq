@@ -162,11 +162,11 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     let photoUrls: string[] = []
     const photoMatches = dataStr.match(/"baseUrl":\s*"(https:\/\/a0\.muscache\.com[^"]+)"/g)
     if (photoMatches) {
-      photoUrls = photoMatches
-        .map(m => m.match(/"baseUrl":\s*"([^"]+)"/)?.[1] ?? '')
-        .filter(Boolean)
-      photoUrls = Array.from(new Set(photoUrls)).slice(0, 10)
-      photoCount = photoMatches.length
+      const uniqueUrls = Array.from(new Set(
+        photoMatches.map(m => m.match(/"baseUrl":\s*"([^"]+)"/)?.[1] ?? '').filter(Boolean)
+      ))
+      photoUrls = uniqueUrls.slice(0, 10)
+      photoCount = uniqueUrls.length
     }
 
     if (!title && !description) {
@@ -313,13 +313,13 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
       if (!photoCount) {
         const pm = dataStr.match(/"baseUrl":\s*"(https:\/\/a0\.muscache\.com[^"]+)"/g)
         if (pm) {
+          const uniqueUrls = Array.from(new Set(
+            pm.map(m => m.match(/"baseUrl":\s*"([^"]+)"/)?.[1] ?? '').filter(Boolean)
+          ))
           if (!photoUrls.length) {
-            photoUrls = pm
-              .map(m => m.match(/"baseUrl":\s*"([^"]+)"/)?.[1] ?? '')
-              .filter(Boolean)
-            photoUrls = Array.from(new Set(photoUrls)).slice(0, 10)
+            photoUrls = uniqueUrls.slice(0, 10)
           }
-          photoCount = pm.length
+          photoCount = uniqueUrls.length
         }
       }
     } catch {}
@@ -338,8 +338,9 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
   }
   if (!description && metaDescription) description = metaDescription
   if (!photoCount) {
-    const imgMatches = html.match(/a0\.muscache\.com/g)
-    photoCount = imgMatches ? Math.min(imgMatches.length, 50) : 0
+    // Count unique muscache URLs as a rough photo count estimate
+    const imgMatches = html.match(/https:\/\/a0\.muscache\.com\/[^"'\s)]+/g)
+    photoCount = imgMatches ? new Set(imgMatches).size : 0
   }
 
   if (!title && !description) {
