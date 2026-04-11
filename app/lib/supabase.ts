@@ -146,10 +146,16 @@ export async function cacheReport(sessionId: string, plan: string, listingUrl: s
     row.photo_results = photoResults
     row.photo_previews = photoPreviews || null
   }
+  // Explicit onConflict: session_id is the dedup key (matches updateCachedPhotos).
+  // Without this, Supabase defaults to the primary key, which can cause silent
+  // insert failures if session_id has a unique constraint instead of being the PK.
   const { error } = await db
     .from('cached_reports')
-    .upsert(row)
-  if (error) { console.error('[db] cacheReport:', error); return false }
+    .upsert(row, { onConflict: 'session_id' })
+  if (error) {
+    console.error(`[db] cacheReport FAILED for session=${sessionId}:`, error)
+    return false
+  }
   return true
 }
 
@@ -181,15 +187,29 @@ export async function getCachedReportBySession(sessionId: string): Promise<{
 /** Update cached report with photo results (added after initial report) */
 export async function updateCachedPhotos(sessionId: string, photoResults: object, photoPreviews?: string[] | null): Promise<boolean> {
   const db = getSupabaseAdmin()
-  if (!db) return false
-  // Use upsert to handle race condition where cacheReport hasn't finished inserting yet
-  const { error } = await db
+  if (!db) { console.warn('[db] Supabase not configured, skipping updateCachedPhotos'); return false }
+  // Strictly UPDATE the existing row — never insert. cacheReport() is awaited
+  // before analyze/route.ts returns, so the row MUST already exist by the time
+  // this runs. Using upsert here caused NOT NULL violations (plan/listing_url/
+  // report_data) whenever the insert branch was taken, silently leaving customers
+  // without their photo results on email re-access.
+  const { data, error } = await db
     .from('cached_reports')
-    .upsert(
-      { session_id: sessionId, photo_results: photoResults, photo_previews: photoPreviews || null },
-      { onConflict: 'session_id', ignoreDuplicates: false }
-    )
-  if (error) { console.error('[db] updateCachedPhotos:', error); return false }
+    .update({ photo_results: photoResults, photo_previews: photoPreviews || null })
+    .eq('session_id', sessionId)
+    .select('session_id')
+  if (error) {
+    // Error-level log: silent failures here cause email re-access to show
+    // "Pending" / upload dropzone instead of the analyzed photos the customer paid for.
+    console.error(`[db] updateCachedPhotos FAILED for session=${sessionId}:`, error)
+    return false
+  }
+  if (!data || data.length === 0) {
+    // Row does not exist — this means analyze/route.ts either skipped cacheReport
+    // (e.g. LRU cache-hit bypass) or the row was deleted. Loud log so we notice.
+    console.error(`[db] updateCachedPhotos: no row found for session=${sessionId} — cacheReport was never called or was rolled back`)
+    return false
+  }
   return true
 }
 

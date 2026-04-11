@@ -17,7 +17,6 @@ interface Props {
   listingUrl?: string
   initialPhotoResults?: PhotoAnalysisResult | null
   initialPhotoPreviews?: string[] | null
-  autoAnalyzingPhotos?: boolean
 }
 
 const ProblemTag = ({ text }: { text: string }) => (
@@ -46,7 +45,7 @@ function scoreColor(s: number) {
   return s >= 80 ? '#4a7c2f' : s >= 60 ? '#b45309' : '#b91c1c'
 }
 
-export default function Report({ data: rawData, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null, autoAnalyzingPhotos = false }: Props) {
+export default function Report({ data: rawData, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null }: Props) {
   // Ensure all array fields have safe defaults to prevent crashes from incomplete AI responses
   const d: ReportData = {
     ...rawData,
@@ -148,7 +147,6 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
           </div>
           <p className="text-xs text-stone-500 mt-2">
             Save your report — download the PDF before leaving this page.
-            {hasPhotoAnalysis && !photoResults && autoAnalyzingPhotos && ' PDF will include photo analysis once it completes below.'}
           </p>
         </div>
       </div>
@@ -168,9 +166,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
             ) : (
               <>
                 <div style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-300 mt-1">—</div>
-                <div className="text-[10px] text-stone-400 mt-1">
-                  {autoAnalyzingPhotos ? 'Analyzing...' : 'Pending'}
-                </div>
+                <div className="text-[10px] text-stone-400 mt-1">Pending</div>
               </>
             )}
           </div>
@@ -277,31 +273,18 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
               AI Photo Analysis
             </h3>
           </div>
-          {autoAnalyzingPhotos && !photoResults ? (
-            /* Loading state while listing photos are being auto-analyzed */
-            <div className="py-10 text-center">
-              <div className="w-8 h-8 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin mx-auto mb-4" />
-              <p style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-medium text-stone-900 mb-1">
-                Analyzing your listing photos...
-              </p>
-              <p className="text-xs text-stone-500">
-                Scoring each photo, identifying hero shots, and generating gallery order
-              </p>
-            </div>
-          ) : (
-            <PhotoUploader
-              listingContext={{
-                title: d.summary,
-                description: d.descriptionRewrite,
-                amenities: d.topAmenities,
-                missingPhotos: d.missingPhotos,
-              }}
-              onResults={setPhotoResults}
-              onPreviews={setPhotoPreviews}
-              initialResults={initialPhotoResults}
-              initialPreviews={initialPhotoPreviews}
-            />
-          )}
+          <PhotoUploader
+            listingContext={{
+              title: d.summary,
+              description: d.descriptionRewrite,
+              amenities: d.topAmenities,
+              missingPhotos: d.missingPhotos,
+            }}
+            onResults={setPhotoResults}
+            onPreviews={setPhotoPreviews}
+            initialResults={initialPhotoResults}
+            initialPreviews={initialPhotoPreviews}
+          />
         </div>
       )}
 

@@ -376,11 +376,25 @@ export async function POST(req: NextRequest) {
           cachedPhotoPreviews: cached.photoPreviews,
         })
       }
+      // Re-access + credit already used + cache miss → refuse to re-bill.
+      // Falling through to a fresh Claude call here would let a broken cache
+      // write re-burn the API on every email click. Support handles genuine
+      // "first attempt failed after payment" cases out-of-band.
+      if (cacheOnly) {
+        console.error(`[analyze] re-access cache miss for session=${body.sessionId} — refusing to re-bill`)
+        // Capture the payment if not already: the customer paid and we owe
+        // them the report — support will deliver it manually.
+        await capturePaymentIntent(paymentIntentId, alreadyCaptured)
+        settled = true
+        return NextResponse.json(
+          {
+            error:
+              'Your saved report is no longer available for automatic re-access. Please email hello@listingiq.pro with your receipt and we will restore it for you.',
+          },
+          { status: 410 }
+        )
+      }
     }
-
-    // If credit was already used and cache missed, allow a retry — the original
-    // analysis likely failed after consuming the credit, so the user never got results
-    // (if cache had existed, it would have been returned above at line 332-341)
 
     // Return mock data for demo or when USE_MOCK_API is enabled
     if (isDemo || USE_MOCK) {

@@ -6,7 +6,7 @@ import { usePhotoCredit } from '@/app/lib/session-usage'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { getPhotos, deletePhotos, StoredPhoto } from '@/app/lib/photo-store'
 import { updateCachedPhotos, getCachedReportBySession } from '@/app/lib/supabase'
-import { validateImageFile, validateBase64Image } from '@/app/lib/validate-image'
+import { validateImageFile, validateBase64Image, detectImageType } from '@/app/lib/validate-image'
 import { isValidPhotoUrl } from '@/app/lib/validation'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -229,14 +229,25 @@ export async function POST(req: NextRequest) {
       if (!credit.allowed) {
         return NextResponse.json({ error: credit.error }, { status: 403 })
       }
-      // Credit already used and this is a re-access — return cached data if available
+      // Credit already used and this is a re-access — return cached data ONLY.
+      // NEVER fall through to a fresh Claude API call here: that path has
+      // historically burned the Anthropic balance when silent cache write
+      // failures caused every re-access click to re-bill a full 10-image
+      // photo analysis (~$0.30+ per click). Genuine retries after an initial
+      // failure are handled out-of-band via support.
       if (credit.cacheOnly) {
         const cached = await getCachedReportBySession(sessionId!)
         if (cached?.photoResults) {
-          // Photos exist in cache — return them
           return NextResponse.json(cached.photoResults)
         }
-        // Photos were never cached (original analysis failed) — allow retry
+        console.error(`[photo-analyze] re-access cache miss for session=${sessionId} — refusing to re-bill, customer must contact support`)
+        return NextResponse.json(
+          {
+            error:
+              'Your photo analysis is no longer available for automatic re-access. Please email hello@listingiq.pro with your receipt and we will restore it for you.',
+          },
+          { status: 410 }
+        )
       }
     }
 
@@ -254,16 +265,26 @@ export async function POST(req: NextRequest) {
     const filenames: string[] = []
 
     if (photoUrls.length) {
-      // From scraped listing URLs — download and convert to base64
+      // From scraped listing URLs — download and convert to base64.
+      // IMPORTANT: Use magic-byte detection, NOT the Content-Type header.
+      // Airbnb's CDN has been observed returning a Content-Type that does not
+      // match the actual bytes (e.g. image/jpeg header on a PNG payload),
+      // causing Anthropic to 400 with "The image was specified using the
+      // image/jpeg media type, but the image appears to be a image/png image".
       for (let i = 0; i < photoUrls.length; i++) {
         try {
           const imgRes = await fetch(photoUrls[i])
           if (!imgRes.ok) { console.warn(`[photo-analyze] Failed to fetch photo ${i + 1}: HTTP ${imgRes.status}`); continue }
           const buf = await imgRes.arrayBuffer()
+          const realType = detectImageType(buf)
+          if (!realType) {
+            console.warn(`[photo-analyze] Photo ${i + 1} failed magic-byte detection, skipping`)
+            continue
+          }
           const base64 = Buffer.from(buf).toString('base64')
-          const ct = imgRes.headers.get('content-type') || 'image/jpeg'
-          const mediaType = ct.split(';')[0] as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
-          const name = `listing-photo-${i + 1}.jpg`
+          const mediaType = realType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+          const ext = realType === 'image/png' ? 'png' : realType === 'image/webp' ? 'webp' : 'jpg'
+          const name = `listing-photo-${i + 1}.${ext}`
           labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${name}]` })
           labeledContents.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } })
           filenames.push(name)

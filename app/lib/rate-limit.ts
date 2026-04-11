@@ -1,7 +1,7 @@
 /**
  * Simple in-memory rate limiter for API routes.
  * Tracks requests per IP with a sliding window.
- * Works on single-instance deployments (Railway, Vercel serverless per-function).
+ * Works on single-instance deployments (e.g. Railway).
  */
 
 const requests = new Map<string, number[]>()

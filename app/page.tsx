@@ -46,7 +46,6 @@ export default function Home() {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [initialPhotoResults, setInitialPhotoResults] = useState<PhotoAnalysisResult | null>(null)
   const [initialPhotoPreviews, setInitialPhotoPreviews] = useState<string[] | null>(null)
-  const [autoAnalyzingPhotos, setAutoAnalyzingPhotos] = useState(false)
   // Hydrating: true while useEffect resolves a returning user (email re-access or saved report).
   // Prevents the input form from flashing for 1-2s before the report renders.
   const [hydrating, setHydrating] = useState<boolean>(() => {
@@ -90,14 +89,12 @@ export default function Home() {
             if (savedPhotos) {
               setInitialPhotoResults(JSON.parse(savedPhotos))
               if (savedPreviews) setInitialPhotoPreviews(JSON.parse(savedPreviews))
-            } else if (savedPlan === 'full-audit') {
-              // Photos missing (original analysis failed) — auto-analyze from listing photos
-              const sid = localStorage.getItem('listingiq_session_id')
-              const photoUrls = parsedReport.photoUrls || (parsedReport as any).photoUrls
-              if (sid && photoUrls?.length) {
-                autoAnalyzePhotos(photoUrls, sid, parsedReport)
-              }
             }
+            // NOTE: do NOT auto-re-analyze missing photos here. The re-access
+            // credit is already consumed, so hitting /api/analyze-photos would
+            // previously fall through to a fresh paid Claude call on every
+            // click. Server now 410s that path; customers with a genuine
+            // first-attempt failure are handled via support.
             return
           } catch {}
         }
@@ -134,14 +131,12 @@ export default function Home() {
                 if (cacheData.photoPreviews) setInitialPhotoPreviews(cacheData.photoPreviews)
                 // Safety net: send email if original tab closed before it was sent
                 sendReportEmail(sid)
-              } else if (cachedPlan === 'full-audit') {
-                // Photos not cached yet — auto-analyze from listing photos
-                const photoUrls = reportData.photoUrls || (reportData as any).photoUrls
-                if (photoUrls?.length) {
-                  autoAnalyzePhotos(photoUrls, sid, reportData)
-                }
               } else {
-                // Quick Score re-access (no photos needed) — ensure email was sent
+                // Photos missing on re-access (full-audit cache miss, or
+                // quick-score with no photos). Do NOT trigger a fresh
+                // analyze-photos call — the re-access credit is already
+                // consumed and the server will 410 it. Send the email safety
+                // net so the customer still gets their text report.
                 sendReportEmail(sid)
               }
               localStorage.setItem('listingiq_report', JSON.stringify(reportData))
@@ -237,36 +232,6 @@ export default function Home() {
     }).catch(err => console.warn('[email] Failed to trigger report email:', err))
   }
 
-  /** Auto-analyze listing photos for email re-access when photos aren't cached yet. */
-  async function autoAnalyzePhotos(photoUrls: string[], sessionId: string, reportData: ReportData) {
-    setAutoAnalyzingPhotos(true)
-    try {
-      const listingContext = {
-        title: reportData.summary || '',
-        amenities: reportData.topAmenities || [],
-        missingPhotos: reportData.missingPhotos || [],
-      }
-      const photoRes = await fetch('/api/analyze-photos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ photoUrls, sessionId, listingContext, reaccess: true }),
-      })
-      if (photoRes.ok) {
-        const photoData = await photoRes.json()
-        setInitialPhotoResults(photoData)
-        const previews = photoData.previews || null
-        if (previews) setInitialPhotoPreviews(previews)
-        savePhotoResultsToStorage(photoData, previews)
-        // Photos now cached — safe to send email
-        sendReportEmail(sessionId)
-      }
-    } catch (err) {
-      console.warn('[autoAnalyzePhotos] Failed:', err)
-    } finally {
-      setAutoAnalyzingPhotos(false)
-    }
-  }
-
   async function animateSteps(withPhotos: boolean) {
     const steps = withPhotos ? LOADING_STEPS_WITH_PHOTOS : LOADING_STEPS
     for (let i = 0; i < steps.length; i++) {
@@ -282,7 +247,6 @@ export default function Home() {
     setReport(null)
     setInitialPhotoResults(null)
     setInitialPhotoPreviews(null)
-    setAutoAnalyzingPhotos(false)
 
     const plan = planOverride || activePlan
     // Check for user-uploaded photos
@@ -390,8 +354,9 @@ export default function Home() {
         localStorage.setItem('listingiq_report', JSON.stringify(data))
         localStorage.setItem('listingiq_plan', plan)
         // Send email after all analysis is attempted (text always, photos if Full Audit).
-        // Send even if photos failed — text report is cached, and email re-access
-        // will auto-analyze photos via autoAnalyzePhotos() if they're missing.
+        // If photo analysis failed, the text report is still cached. Customers
+        // whose photos didn't survive to the cache must contact support — the
+        // server no longer auto-re-bills photo analysis on re-access.
         const sid = localStorage.getItem('listingiq_session_id')
         if (sid && !payload.reaccess) {
           sendReportEmail(sid)
@@ -523,7 +488,6 @@ export default function Home() {
         listingUrl={url}
         initialPhotoResults={initialPhotoResults}
         initialPhotoPreviews={initialPhotoPreviews}
-        autoAnalyzingPhotos={autoAnalyzingPhotos}
       />
     </main>
   )
