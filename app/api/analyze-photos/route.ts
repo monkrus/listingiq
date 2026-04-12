@@ -9,6 +9,7 @@ import { updateCachedPhotos, getCachedReportBySession } from '@/app/lib/supabase
 import { validateImageFile, validateBase64Image, detectImageType } from '@/app/lib/validate-image'
 import { isValidPhotoUrl } from '@/app/lib/validation'
 import { resizeForVision } from '@/app/lib/resize-image'
+import { logAnalyticsEvent } from '@/app/lib/analytics'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -137,6 +138,7 @@ function buildMockResult(filenames: string[]): PhotoAnalysisResult {
 }
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now()
   try {
     // Origin check — reject requests from external sites
     const originBlock = checkOrigin(req)
@@ -467,9 +469,11 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
       }
     }
 
+    logAnalyticsEvent({ route: 'analyze-photos', success: true, duration_ms: Date.now() - startTime, photo_count: actualPhotoCount })
     return NextResponse.json(responseData)
   } catch (err) {
     console.error('[photo-analyze]', err)
+    logAnalyticsEvent({ route: 'analyze-photos', success: false, duration_ms: Date.now() - startTime, error: err instanceof Error ? err.message : 'Unknown error' })
     return NextResponse.json({ error: 'Photo analysis failed' }, { status: 500 })
   }
 }

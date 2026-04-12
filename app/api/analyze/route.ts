@@ -11,6 +11,7 @@ import { getCachedReport, setCachedReport } from '@/app/lib/report-cache'
 import { stripe } from '@/app/lib/stripe'
 import { estimateImprovement } from '@/app/lib/estimate-improvement'
 import { validateReport } from '@/app/lib/validate-report'
+import { logAnalyticsEvent } from '@/app/lib/analytics'
 
 /**
  * Capture a manually-authorized payment intent. No-op if already captured
@@ -219,6 +220,7 @@ export async function POST(req: NextRequest) {
   // authorization so the customer's card hold is released immediately instead
   // of sitting for ~7 days until Stripe auto-voids it.
   let settled = false
+  const startTime = Date.now()
   try {
     // Origin check — reject requests from external sites
     const originBlock = checkOrigin(req)
@@ -353,6 +355,7 @@ export async function POST(req: NextRequest) {
             console.error('[analyze] Failed to cache LRU-hit report to Supabase:', err)
           }
         }
+        logAnalyticsEvent({ route: 'analyze', plan, success: true, duration_ms: Date.now() - startTime, cache_hit: true })
         return NextResponse.json(cached)
       }
     }
@@ -419,9 +422,11 @@ export async function POST(req: NextRequest) {
     await capturePaymentIntent(paymentIntentId, alreadyCaptured)
     settled = true
 
+    logAnalyticsEvent({ route: 'analyze', plan, success: true, duration_ms: Date.now() - startTime, is_demo: isDemo, is_reaccess: !!body.reaccess })
     return NextResponse.json(fullReport)
   } catch (err) {
     console.error('[analyze] Error:', err)
+    logAnalyticsEvent({ route: 'analyze', success: false, duration_ms: Date.now() - startTime, error: err instanceof Error ? err.message : 'Unknown error' })
     return NextResponse.json({ error: 'Analysis failed. Check your API key and try again.' }, { status: 500 })
   } finally {
     // Safety net: if we exit the handler without an explicit capture/cancel,
