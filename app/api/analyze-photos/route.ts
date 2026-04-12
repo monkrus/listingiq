@@ -8,6 +8,7 @@ import { getPhotos, deletePhotos, StoredPhoto } from '@/app/lib/photo-store'
 import { updateCachedPhotos, getCachedReportBySession } from '@/app/lib/supabase'
 import { validateImageFile, validateBase64Image, detectImageType } from '@/app/lib/validate-image'
 import { isValidPhotoUrl } from '@/app/lib/validation'
+import { resizeForVision } from '@/app/lib/resize-image'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -281,12 +282,12 @@ export async function POST(req: NextRequest) {
             console.warn(`[photo-analyze] Photo ${i + 1} failed magic-byte detection, skipping`)
             continue
           }
-          const base64 = Buffer.from(buf).toString('base64')
-          const mediaType = realType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
-          const ext = realType === 'image/png' ? 'png' : realType === 'image/webp' ? 'webp' : 'jpg'
-          const name = `listing-photo-${i + 1}.${ext}`
+          // Resize to max 1024px to cut Claude Vision token cost ~4x
+          const resized = await resizeForVision(Buffer.from(buf))
+          const base64 = resized.buffer.toString('base64')
+          const name = `listing-photo-${i + 1}.jpg`
           labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${name}]` })
-          labeledContents.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } })
+          labeledContents.push({ type: 'image', source: { type: 'base64', media_type: resized.mediaType, data: base64 } })
           filenames.push(name)
         } catch (err) {
           console.warn(`[photo-analyze] Failed to download photo ${i + 1}:`, err)
@@ -296,7 +297,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Could not download listing photos. Please upload photos manually.' }, { status: 502 })
       }
     } else if (storedPhotos) {
-      // From pre-payment upload store — re-validate magic bytes
+      // From pre-payment upload store — re-validate magic bytes + resize
       for (let i = 0; i < storedPhotos.length; i++) {
         const p = storedPhotos[i]
         const realType = validateBase64Image(p.base64)
@@ -304,23 +305,23 @@ export async function POST(req: NextRequest) {
           console.warn(`[photo-analyze] Stored photo ${p.filename} failed magic byte check, skipping`)
           continue
         }
+        const resized = await resizeForVision(Buffer.from(p.base64, 'base64'))
         labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${p.filename}]` })
         labeledContents.push({
           type: 'image',
-          source: { type: 'base64', media_type: realType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif', data: p.base64 },
+          source: { type: 'base64', media_type: resized.mediaType, data: resized.buffer.toString('base64') },
         })
         filenames.push(p.filename)
       }
     } else {
-      // From direct file upload — use validated type from magic bytes
+      // From direct file upload — validate magic bytes + resize
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         const bytes = await file.arrayBuffer()
-        const base64 = Buffer.from(bytes).toString('base64')
-        const realType = await validateImageFile(file)
-        const mediaType = realType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+        await validateImageFile(file) // throws if not a valid image
+        const resized = await resizeForVision(Buffer.from(bytes))
         labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${file.name}]` })
-        labeledContents.push({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } })
+        labeledContents.push({ type: 'image', source: { type: 'base64', media_type: resized.mediaType, data: resized.buffer.toString('base64') } })
         filenames.push(file.name)
       }
     }
@@ -349,7 +350,7 @@ Check if the photos support what the listing promises. Flag if key selling point
         model: (process.env.CLAUDE_MODEL as string) || 'claude-sonnet-4-6',
         max_tokens: 4000,
         temperature: 0,
-        system: PHOTO_SYSTEM,
+        system: [{ type: 'text', text: PHOTO_SYSTEM, cache_control: { type: 'ephemeral' } }],
         messages: [{
           role: 'user',
           content: [

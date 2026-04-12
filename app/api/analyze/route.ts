@@ -359,7 +359,7 @@ export async function POST(req: NextRequest) {
         model: (process.env.CLAUDE_MODEL as string) || 'claude-sonnet-4-6',
         max_tokens: 3000,
         temperature: 0,
-        system: SYSTEM,
+        system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: buildPrompt(listing, wasScraped) }],
       })
 
