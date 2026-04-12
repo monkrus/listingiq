@@ -8,6 +8,7 @@
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npx playwright test",
     "verify:capture": "node scripts/verify-manual-capture.mjs"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "stripe": "^16.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/node": "^20",
     "@types/react": "^18",
     "@vitejs/plugin-react": "^6.0.1",

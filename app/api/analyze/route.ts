@@ -4,7 +4,7 @@ import { ListingInput } from '@/app/lib/types'
 import { scrapeAirbnbListing, isValidAirbnbUrl } from '@/app/lib/scraper'
 import { saveReport, cacheReport, getCachedReportBySession } from '@/app/lib/supabase'
 import { verifyPayment } from '@/app/lib/verify-payment'
-import { rateLimit } from '@/app/lib/rate-limit'
+import { rateLimit, dailyRateLimit } from '@/app/lib/rate-limit'
 import { useAnalysisCredit } from '@/app/lib/session-usage'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { getCachedReport, setCachedReport } from '@/app/lib/report-cache'
@@ -224,11 +224,15 @@ export async function POST(req: NextRequest) {
     const originBlock = checkOrigin(req)
     if (originBlock) return originBlock
 
-    // Rate limit: 5 requests per minute per IP
+    // Rate limit: 5 requests per minute per IP (burst) + 50 per day (persistent)
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
     const { limited } = rateLimit(ip, 5, 60_000)
     if (limited) {
       return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
+    }
+    const daily = await dailyRateLimit(ip, 'analyze', 50)
+    if (daily.limited) {
+      return NextResponse.json({ error: 'Daily request limit reached. Please try again tomorrow.' }, { status: 429 })
     }
 
     const body: ListingInput & { userId?: string; sessionId?: string; plan?: string; reaccess?: boolean } = await req.json()

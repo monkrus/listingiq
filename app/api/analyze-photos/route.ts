@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyPayment } from '@/app/lib/verify-payment'
-import { rateLimit } from '@/app/lib/rate-limit'
+import { rateLimit, dailyRateLimit } from '@/app/lib/rate-limit'
 import { usePhotoCredit } from '@/app/lib/session-usage'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { getPhotos, deletePhotos, StoredPhoto } from '@/app/lib/photo-store'
@@ -147,6 +147,10 @@ export async function POST(req: NextRequest) {
     const { limited } = rateLimit(ip, 3, 60_000)
     if (limited) {
       return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
+    }
+    const daily = await dailyRateLimit(ip, 'analyze-photos', 50)
+    if (daily.limited) {
+      return NextResponse.json({ error: 'Daily request limit reached. Please try again tomorrow.' }, { status: 429 })
     }
 
     // Three input modes: FormData (direct upload), JSON with uploadId (pre-payment), or JSON with photoUrls (scraped listing)

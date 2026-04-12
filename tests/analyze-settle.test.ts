@@ -56,6 +56,7 @@ vi.mock('@/app/lib/check-origin', () => ({
 
 vi.mock('@/app/lib/rate-limit', () => ({
   rateLimit: mocks.rateLimit,
+  dailyRateLimit: vi.fn().mockResolvedValue({ limited: false }),
 }))
 
 vi.mock('@/app/lib/supabase', () => ({
