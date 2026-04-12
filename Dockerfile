@@ -6,7 +6,9 @@ RUN apk add --no-cache vips-dev
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --include=optional
+RUN npm ci
+# Ensure sharp has correct native binaries for Alpine (musl)
+RUN npm install --os=linux --libc=musl --cpu=x64 sharp
 
 # Build the application
 FROM base AS builder
