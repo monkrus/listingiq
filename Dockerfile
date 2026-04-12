@@ -1,10 +1,12 @@
 FROM node:22-alpine AS base
+# sharp requires these native libs on Alpine
+RUN apk add --no-cache vips-dev
 
 # Install dependencies only when needed
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --include=optional
 
 # Build the application
 FROM base AS builder
