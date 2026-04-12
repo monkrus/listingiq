@@ -3,7 +3,7 @@ import { stripe } from '@/app/lib/stripe'
 import { sendReceiptEmail } from '@/app/lib/email'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { rateLimit } from '@/app/lib/rate-limit'
-import { markEmailSent, isEmailSent } from '@/app/lib/supabase'
+import { markEmailSent, isEmailSent, getCachedReportBySession } from '@/app/lib/supabase'
 
 // In-memory dedup (fast path — survives within a single process lifetime)
 const sentEmails = new Set<string>()
@@ -51,7 +51,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ sent: false, reason: 'no_email' })
     }
 
-    await sendReceiptEmail({ to: email, plan, sessionId })
+    // Fetch cached report to include content in the email
+    const cached = await getCachedReportBySession(sessionId)
+    const reportData = cached?.reportData as Record<string, unknown> | undefined
+
+    await sendReceiptEmail({ to: email, plan, sessionId, reportData })
 
     // Mark as sent in both memory and Supabase
     sentEmails.add(sessionId)
