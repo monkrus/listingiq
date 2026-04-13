@@ -101,7 +101,7 @@ export async function dailyRateLimit(
     const count = typeof data === 'number' ? data : 0
     dailyCache.set(cacheKey, count)
 
-    return { limited: count > maxDaily }
+    return { limited: count >= maxDaily }
   } catch {
     return { limited: false } // graceful degradation
   }

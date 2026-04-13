@@ -5,6 +5,11 @@
  *
  * Quick Score: 1 analysis
  * Full Audit:  1 analysis + 1 photo analysis
+ *
+ * Concurrency: uses a per-session Promise lock so two simultaneous
+ * requests for the same session can't both pass the credit check on
+ * cold start (the Stripe metadata fetch is async, creating a TOCTOU
+ * window without the lock).
  */
 
 import { stripe } from './stripe'
@@ -18,6 +23,10 @@ interface SessionUsage {
 
 const sessions = new Map<string, SessionUsage>()
 
+// Per-session lock: prevents concurrent requests from both passing
+// the credit check before either writes back to the Map.
+const locks = new Map<string, Promise<SessionUsage>>()
+
 const PLAN_LIMITS: Record<string, { analyze: number; photo: number }> = {
   'quick-score': { analyze: 1, photo: 0 },
   'full-audit':  { analyze: 1, photo: 1 },
@@ -27,7 +36,10 @@ const PLAN_LIMITS: Record<string, { analyze: number; photo: number }> = {
 setInterval(() => {
   const cutoff = Date.now() - 24 * 60 * 60_000
   sessions.forEach((usage, key) => {
-    if (usage.createdAt < cutoff) sessions.delete(key)
+    if (usage.createdAt < cutoff) {
+      sessions.delete(key)
+      locks.delete(key)
+    }
   })
 }, 30 * 60_000)
 
@@ -42,30 +54,44 @@ export function registerPaidSession(sessionId: string, plan: string): void {
 
 /**
  * Load usage state from Stripe metadata if not in memory.
+ * Uses a per-session lock to prevent concurrent cold-start race conditions.
  */
 async function ensureSessionFromStripe(sessionId: string, plan: string): Promise<SessionUsage> {
+  // Fast path: already in memory (synchronous, no race possible)
   if (sessions.has(sessionId)) {
     return sessions.get(sessionId)!
   }
 
-  // Check Stripe metadata for prior usage (survives restarts)
-  try {
-    const stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
-    const meta = stripeSession.metadata || {}
-    const usage: SessionUsage = {
-      analyzeCount: meta.analyze_used === 'true' ? 1 : 0,
-      photoCount: meta.photo_used === 'true' ? 1 : 0,
-      plan: meta.planKey || plan,
-      createdAt: Date.now(),
-    }
-    sessions.set(sessionId, usage)
-    return usage
-  } catch {
-    // Fallback: create fresh entry
-    const usage: SessionUsage = { analyzeCount: 0, photoCount: 0, plan, createdAt: Date.now() }
-    sessions.set(sessionId, usage)
-    return usage
+  // Slow path: need to fetch from Stripe. Use a lock so only the first
+  // concurrent request does the fetch; others wait for the same Promise.
+  if (locks.has(sessionId)) {
+    return locks.get(sessionId)!
   }
+
+  const fetchPromise = (async (): Promise<SessionUsage> => {
+    try {
+      const stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
+      const meta = stripeSession.metadata || {}
+      const usage: SessionUsage = {
+        analyzeCount: meta.analyze_used === 'true' ? 1 : 0,
+        photoCount: meta.photo_used === 'true' ? 1 : 0,
+        plan: meta.planKey || plan,
+        createdAt: Date.now(),
+      }
+      sessions.set(sessionId, usage)
+      return usage
+    } catch {
+      // Fallback: create fresh entry
+      const usage: SessionUsage = { analyzeCount: 0, photoCount: 0, plan, createdAt: Date.now() }
+      sessions.set(sessionId, usage)
+      return usage
+    } finally {
+      locks.delete(sessionId)
+    }
+  })()
+
+  locks.set(sessionId, fetchPromise)
+  return fetchPromise
 }
 
 /**

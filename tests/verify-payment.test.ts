@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const retrieveFn = vi.fn()
+const retrieveSessionFn = vi.fn()
+const retrievePiFn = vi.fn()
 
 vi.mock('@/app/lib/stripe', () => ({
   stripe: {
-    checkout: { sessions: { retrieve: (...args: any[]) => retrieveFn(...args), update: vi.fn() } },
+    checkout: { sessions: { retrieve: (...args: any[]) => retrieveSessionFn(...args), update: vi.fn() } },
+    paymentIntents: { retrieve: (...args: any[]) => retrievePiFn(...args) },
   },
 }))
 
@@ -32,7 +34,7 @@ describe('verifyPayment', () => {
   })
 
   it('accepts captured (paid) session', async () => {
-    retrieveFn.mockResolvedValue({
+    retrieveSessionFn.mockResolvedValue({
       status: 'complete',
       payment_status: 'paid',
       payment_intent: 'pi_123',
@@ -45,21 +47,47 @@ describe('verifyPayment', () => {
     expect(result.paymentIntentId).toBe('pi_123')
   })
 
-  it('accepts authorized-not-captured session', async () => {
-    retrieveFn.mockResolvedValue({
+  it('accepts authorized-not-captured session with requires_capture PI', async () => {
+    retrieveSessionFn.mockResolvedValue({
       status: 'complete',
       payment_status: 'unpaid',
       payment_intent: 'pi_auth_456',
       metadata: { planKey: 'quick-score' },
     })
+    retrievePiFn.mockResolvedValue({ status: 'requires_capture' })
     const result = await verifyPayment('cs_authorized')
     expect(result.valid).toBe(true)
     expect(result.captured).toBe(false)
     expect(result.paymentIntentId).toBe('pi_auth_456')
   })
 
+  it('rejects cancelled payment intent (scrape failed, PI was cancelled)', async () => {
+    retrieveSessionFn.mockResolvedValue({
+      status: 'complete',
+      payment_status: 'unpaid',
+      payment_intent: 'pi_cancelled_789',
+      metadata: { planKey: 'quick-score' },
+    })
+    retrievePiFn.mockResolvedValue({ status: 'canceled' })
+    const result = await verifyPayment('cs_cancelled')
+    expect(result.valid).toBe(false)
+    expect(result.error).toContain('not completed')
+  })
+
+  it('rejects when PI retrieve fails (fail closed)', async () => {
+    retrieveSessionFn.mockResolvedValue({
+      status: 'complete',
+      payment_status: 'unpaid',
+      payment_intent: 'pi_error',
+      metadata: {},
+    })
+    retrievePiFn.mockRejectedValue(new Error('Stripe error'))
+    const result = await verifyPayment('cs_pi_error')
+    expect(result.valid).toBe(false)
+  })
+
   it('rejects incomplete session', async () => {
-    retrieveFn.mockResolvedValue({
+    retrieveSessionFn.mockResolvedValue({
       status: 'open',
       payment_status: 'unpaid',
       payment_intent: null,
@@ -71,7 +99,7 @@ describe('verifyPayment', () => {
   })
 
   it('rejects complete session with no_payment_required and no PI', async () => {
-    retrieveFn.mockResolvedValue({
+    retrieveSessionFn.mockResolvedValue({
       status: 'complete',
       payment_status: 'no_payment_required',
       payment_intent: null,
@@ -82,7 +110,7 @@ describe('verifyPayment', () => {
   })
 
   it('defaults to quick-score when no planKey in metadata', async () => {
-    retrieveFn.mockResolvedValue({
+    retrieveSessionFn.mockResolvedValue({
       status: 'complete',
       payment_status: 'paid',
       payment_intent: 'pi_789',
@@ -94,7 +122,7 @@ describe('verifyPayment', () => {
   })
 
   it('handles payment_intent as object (Stripe expanded)', async () => {
-    retrieveFn.mockResolvedValue({
+    retrieveSessionFn.mockResolvedValue({
       status: 'complete',
       payment_status: 'paid',
       payment_intent: { id: 'pi_expanded_obj' },
@@ -106,7 +134,7 @@ describe('verifyPayment', () => {
   })
 
   it('returns invalid on Stripe API error', async () => {
-    retrieveFn.mockRejectedValue(new Error('Stripe API down'))
+    retrieveSessionFn.mockRejectedValue(new Error('Stripe API down'))
     const result = await verifyPayment('cs_error')
     expect(result.valid).toBe(false)
     expect(result.error).toContain('Invalid payment session')

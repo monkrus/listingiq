@@ -339,15 +339,10 @@ export async function POST(req: NextRequest) {
     if (!body.isDemo && listingUrl) {
       const cached = getCachedReport(listingUrl, plan) as Record<string, unknown> | null
       if (cached) {
-        // Cache hit is still a successful delivery — capture the authorization
-        // so we get paid, otherwise the finally block would release the hold
-        // and the customer would receive a free report.
-        await capturePaymentIntent(paymentIntentId, alreadyCaptured)
-        settled = true
-        // CRITICAL: persist to Supabase on cache hit too. Without this,
-        // email re-access fails for any buyer whose report came from the LRU
-        // cache (silent "no row" for updateCachedPhotos, customer sees upload
-        // dropzone instead of their paid photos).
+        // CRITICAL: persist to Supabase BEFORE capturing payment. If the
+        // Supabase write fails, the customer would be charged but unable
+        // to re-access their report via email. By writing first, we ensure
+        // the data is durable before taking money.
         if (body.sessionId) {
           try {
             await cacheReport(body.sessionId, plan, listingUrl, cached)
@@ -355,6 +350,9 @@ export async function POST(req: NextRequest) {
             console.error('[analyze] Failed to cache LRU-hit report to Supabase:', err)
           }
         }
+        // Now capture the payment — report is safely cached for re-access
+        await capturePaymentIntent(paymentIntentId, alreadyCaptured)
+        settled = true
         logAnalyticsEvent({ route: 'analyze', plan, success: true, duration_ms: Date.now() - startTime, cache_hit: true })
         return NextResponse.json(cached)
       }

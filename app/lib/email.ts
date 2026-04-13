@@ -6,6 +6,11 @@ const resend = process.env.RESEND_API_KEY
 
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'ListingIQ <hello@listingiq.pro>'
 
+/** Escape HTML to prevent injection from AI-generated or user content */
+function esc(s: unknown): string {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 function scoreColor(s: number): string {
   return s >= 80 ? '#4a7c2f' : s >= 60 ? '#b45309' : '#b91c1c'
 }
@@ -42,25 +47,25 @@ function buildReportHtml(report: Record<string, unknown>, planName: string): str
   const actions = (d.priorityActions || []).slice(0, 5).map((a: string, i: number) => `
     <tr>
       <td style="padding:6px 0;color:#57534e;font-size:14px;line-height:1.5;border-bottom:1px solid #f5f5f4;">
-        <strong style="color:#b45309;">${i + 1}.</strong> ${a}
+        <strong style="color:#b45309;">${i + 1}.</strong> ${esc(a)}
       </td>
     </tr>`).join('')
 
   // Title suggestions
   const titles = (d.titleSuggestions || []).slice(0, 3).map((t: string) => `
-    <tr><td style="padding:4px 0;color:#1c1917;font-size:14px;">→ ${t}</td></tr>`).join('')
+    <tr><td style="padding:4px 0;color:#1c1917;font-size:14px;">&rarr; ${esc(t)}</td></tr>`).join('')
 
   // Amenity gaps
   const gaps = (d.amenityGaps || []).slice(0, 3).map((g: string) => `
-    <tr><td style="padding:3px 0;color:#57534e;font-size:13px;">• ${g}</td></tr>`).join('')
+    <tr><td style="padding:3px 0;color:#57534e;font-size:13px;">&bull; ${esc(g)}</td></tr>`).join('')
 
   // Top amenities
   const topAmenities = (d.topAmenities || []).slice(0, 3).map((a: string) => `
-    <span style="display:inline-block;background:#f5f5f4;color:#57534e;font-size:12px;padding:3px 10px;border-radius:12px;margin:2px 4px 2px 0;">${a}</span>`).join('')
+    <span style="display:inline-block;background:#f5f5f4;color:#57534e;font-size:12px;padding:3px 10px;border-radius:12px;margin:2px 4px 2px 0;">${esc(a)}</span>`).join('')
 
   // SEO keywords
   const keywords = (d.seoKeywords || []).slice(0, 5).map((k: string) => `
-    <span style="display:inline-block;background:#f0fdf4;color:#166534;font-size:11px;padding:2px 8px;border-radius:8px;margin:2px 3px 2px 0;">${k}</span>`).join('')
+    <span style="display:inline-block;background:#f0fdf4;color:#166534;font-size:11px;padding:2px 8px;border-radius:8px;margin:2px 3px 2px 0;">${esc(k)}</span>`).join('')
 
   return `
     <!-- Overall Score -->
@@ -68,8 +73,8 @@ function buildReportHtml(report: Record<string, unknown>, planName: string): str
       <tr>
         <td style="text-align:center;padding:20px;background:#fafaf9;border-radius:12px;">
           <div style="font-size:11px;color:#78716c;text-transform:uppercase;letter-spacing:1px;">Overall Score</div>
-          <div style="font-size:48px;font-weight:800;color:${scoreColor(d.overallScore)};line-height:1.2;">${d.overallScore}</div>
-          <div style="font-size:13px;color:#78716c;margin-top:4px;">${d.estimatedImprovement || ''}</div>
+          <div style="font-size:48px;font-weight:800;color:${scoreColor(d.overallScore)};line-height:1.2;">${esc(d.overallScore)}</div>
+          <div style="font-size:13px;color:#78716c;margin-top:4px;">${esc(d.estimatedImprovement)}</div>
         </td>
       </tr>
     </table>
@@ -81,7 +86,7 @@ function buildReportHtml(report: Record<string, unknown>, planName: string): str
 
     <!-- Summary -->
     <p style="margin:0 0 20px;color:#1c1917;font-size:15px;line-height:1.6;font-style:italic;border-left:3px solid #10b981;padding-left:12px;">
-      ${d.summary || ''}
+      ${esc(d.summary)}
     </p>
 
     <!-- Priority Actions -->

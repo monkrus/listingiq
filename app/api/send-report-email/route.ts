@@ -3,7 +3,7 @@ import { stripe } from '@/app/lib/stripe'
 import { sendReceiptEmail } from '@/app/lib/email'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { rateLimit } from '@/app/lib/rate-limit'
-import { markEmailSent, isEmailSent, getCachedReportBySession } from '@/app/lib/supabase'
+import { markEmailSent, isEmailSent, getCachedReportBySession, getSupabaseAdmin } from '@/app/lib/supabase'
 
 // In-memory dedup (fast path — survives within a single process lifetime)
 const sentEmails = new Set<string>()
@@ -29,10 +29,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: false, reason: 'already_sent' })
   }
 
-  // Durable dedup: check Supabase (survives cold starts)
-  if (await isEmailSent(sessionId)) {
-    sentEmails.add(sessionId)
-    return NextResponse.json({ sent: false, reason: 'already_sent' })
+  // Durable dedup: check Supabase (survives cold starts).
+  // isEmailSent returns false when Supabase is unavailable — in that case,
+  // only the in-memory Set guards against duplicates. After a restart with
+  // Supabase down, we fail closed to prevent spam.
+  const dbAvailable = !!getSupabaseAdmin()
+  if (dbAvailable) {
+    if (await isEmailSent(sessionId)) {
+      sentEmails.add(sessionId)
+      return NextResponse.json({ sent: false, reason: 'already_sent' })
+    }
+  } else if (!sentEmails.has(sessionId)) {
+    // Supabase down + not in memory = can't verify dedup, fail closed
+    console.warn('[send-report-email] Supabase unavailable for dedup, skipping send')
+    return NextResponse.json({ sent: false, reason: 'dedup_unavailable' })
   }
 
   try {

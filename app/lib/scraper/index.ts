@@ -70,7 +70,7 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     return { ...base, scrapeError: 'Could not extract listing ID from URL' }
   }
 
-  const API_KEY = 'd306zoyjsyarp7ifhu67rjxn52tv0t20'
+  const API_KEY = process.env.AIRBNB_API_KEY || 'd306zoyjsyarp7ifhu67rjxn52tv0t20'
   const apiUrl = `https://www.airbnb.com/api/v3/StaysPdpSections/d1d64f8a2ace16cd48e7a88e7e1f12cca413fa53ff4a3c8b5d20e7ec733361d0?operationName=StaysPdpSections&locale=en&currency=USD&variables=%7B%22id%22%3A%22StaysListing%3A${listingId}%22%2C%22pdpSectionsRequest%22%3A%7B%22adults%22%3A%221%22%2C%22layouts%22%3A%5B%22SIDEBAR%22%2C%22SINGLE_COLUMN%22%5D%7D%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d1d64f8a2ace16cd48e7a88e7e1f12cca413fa53ff4a3c8b5d20e7ec733361d0%22%7D%7D`
 
   try {
