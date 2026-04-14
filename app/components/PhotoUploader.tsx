@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { PhotoAnalysisResult, PhotoVerdict } from '@/app/api/analyze-photos/route'
 import { DEMO_PHOTO_RESULT, DEMO_PHOTO_PREVIEWS } from '@/app/lib/demo'
 
@@ -119,6 +119,15 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
   const [dragging, setDragging] = useState(false)
   const [loadingStepIndex, setLoadingStepIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Sync when initial props arrive after mount (e.g. async Supabase fetch on re-access)
+  useEffect(() => {
+    if (initialResults && initialPreviews?.length) {
+      setResult(initialResults)
+      setPreviews(initialPreviews)
+      setStep('results')
+    }
+  }, [initialResults, initialPreviews])
 
   const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
   const MAX_PHOTOS = 10
