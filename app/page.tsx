@@ -74,31 +74,11 @@ export default function Home() {
       }
       const isCheckout = params.get('checkout') === '1'
 
-      // Reuse saved report for email re-access on same browser (not fresh checkout)
-      if (!isCheckout) {
-        const savedPlan = localStorage.getItem('listingiq_plan')
-        const saved = localStorage.getItem('listingiq_report')
-        if (saved && savedPlan === planParam) {
-          try {
-            const parsedReport = JSON.parse(saved) as ReportData
-            setReport(parsedReport)
-            finishHydrating()
-            // Restore photo results from localStorage
-            const savedPhotos = localStorage.getItem('listingiq_photo_results')
-            const savedPreviews = localStorage.getItem('listingiq_photo_previews')
-            if (savedPhotos) {
-              setInitialPhotoResults(JSON.parse(savedPhotos))
-              if (savedPreviews) setInitialPhotoPreviews(JSON.parse(savedPreviews))
-            }
-            // NOTE: do NOT auto-re-analyze missing photos here. The re-access
-            // credit is already consumed, so hitting /api/analyze-photos would
-            // previously fall through to a fresh paid Claude call on every
-            // click. Server now 410s that path; customers with a genuine
-            // first-attempt failure are handled via support.
-            return
-          } catch {}
-        }
-      }
+      // Email re-access on same browser: skip localStorage shortcut and always
+      // use Supabase cache (below). localStorage may have stale data from a
+      // previous purchase, causing photo results to be missing or mismatched.
+      // Fresh checkout (isCheckout=true) also skips this — it clears localStorage
+      // and runs a new analysis.
 
       const urlParam = params.get('url')
       const photoUploadParam = params.get('photoUploadId')
