@@ -52,7 +52,7 @@ export default function Home() {
     if (typeof window === 'undefined') return false
     const params = new URLSearchParams(window.location.search)
     if (params.get('paid') === '1') return true
-    if (params.get('demo')) return true
+    if (params.get('demo')) return false // demo goes straight to loading, no hydration needed
     if (params.get('new') === '1') return false
     try {
       return !!localStorage.getItem('listingiq_report')
