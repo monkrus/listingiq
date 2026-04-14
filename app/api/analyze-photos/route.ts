@@ -354,7 +354,7 @@ Check if the photos support what the listing promises. Flag if key selling point
 
       const analyzeMessage = await client.messages.create({
         model: (process.env.CLAUDE_MODEL as string) || 'claude-sonnet-4-6',
-        max_tokens: 4000,
+        max_tokens: 8000,
         temperature: 0,
         system: [{ type: 'text', text: PHOTO_SYSTEM, cache_control: { type: 'ephemeral' } }],
         messages: [{
