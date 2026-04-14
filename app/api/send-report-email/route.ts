@@ -65,7 +65,30 @@ export async function POST(req: NextRequest) {
     const cached = await getCachedReportBySession(sessionId)
     const reportData = cached?.reportData as Record<string, unknown> | undefined
 
-    await sendReceiptEmail({ to: email, plan, sessionId, reportData })
+    // For Full Audit, recalculate overall score with photo weighting to match the web report
+    if (reportData && plan === 'full-audit' && cached?.photoResults) {
+      const pr = cached.photoResults as Record<string, unknown>
+      const photoScore = typeof pr.overallPhotoScore === 'number' ? pr.overallPhotoScore : null
+      if (photoScore !== null) {
+        const d = reportData as Record<string, number>
+        const weighted = Math.round(
+          (d.titleScore ?? 0) * 0.17 +
+          (d.descriptionScore ?? 0) * 0.22 +
+          photoScore * 0.15 +
+          (d.amenityScore ?? 0) * 0.17 +
+          (d.personaScore ?? 0) * 0.12 +
+          (d.reviewScore ?? 0) * 0.17
+        )
+        reportData.overallScore = weighted
+      }
+    }
+
+    // Pass photo score so email includes it in sub-scores for Full Audit
+    const photoScore = cached?.photoResults
+      ? (cached.photoResults as Record<string, unknown>).overallPhotoScore as number | undefined
+      : undefined
+
+    await sendReceiptEmail({ to: email, plan, sessionId, reportData, photoScore })
 
     // Mark as sent in both memory and Supabase
     sentEmails.add(sessionId)

@@ -25,13 +25,14 @@ function scoreBar(score: number): string {
     </td>`
 }
 
-function buildReportHtml(report: Record<string, unknown>, planName: string): string {
+function buildReportHtml(report: Record<string, unknown>, planName: string, photoScore?: number | null): string {
   const d = report as Record<string, any>
 
-  // Score cards
-  const scores = [
+  // Score cards — include photo score for Full Audit
+  const scores: { label: string; v: number }[] = [
     { label: 'Title', v: d.titleScore },
     { label: 'Desc', v: d.descriptionScore },
+    ...(typeof photoScore === 'number' ? [{ label: 'Photos', v: photoScore }] : []),
     { label: 'Amenities', v: d.amenityScore },
     { label: 'Persona', v: d.personaScore },
     { label: 'Reviews', v: d.reviewScore },
@@ -141,6 +142,7 @@ export async function sendReceiptEmail(opts: {
   plan: string
   sessionId: string
   reportData?: Record<string, unknown>
+  photoScore?: number | null
 }) {
   if (!resend) {
     console.warn('[email] RESEND_API_KEY not configured — skipping email')
@@ -152,7 +154,7 @@ export async function sendReceiptEmail(opts: {
   const planName = opts.plan === 'full-audit' ? 'Full Audit' : 'Quick Score'
   const planPrice = opts.plan === 'full-audit' ? '$49' : '$29'
 
-  const reportSection = opts.reportData ? buildReportHtml(opts.reportData, planName) : ''
+  const reportSection = opts.reportData ? buildReportHtml(opts.reportData, planName, opts.photoScore) : ''
 
   try {
     await resend.emails.send({
