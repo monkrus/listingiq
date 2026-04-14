@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { ReportData, ListingInput } from './lib/types'
 import { isValidAirbnbUrl } from './lib/validation'
-import { DEMO_LISTING } from './lib/demo'
+import { DEMO_LISTING, DEMO_REPORT, DEMO_PHOTO_RESULT, DEMO_PHOTO_PREVIEWS } from './lib/demo'
 import Report from './components/Report'
 import { APP_VERSION } from './lib/version'
 import PhotoUploadStep from './components/PhotoUploadStep'
@@ -180,14 +180,19 @@ export default function Home() {
       return
     }
 
-    // Auto-launch demo for a specific plan from pricing page
+    // Auto-launch demo — load report instantly from client-side data, no API call
     const demoPlan = params.get('demo')
     if (demoPlan && ['quick-score', 'full-audit'].includes(demoPlan)) {
       setActivePlan(demoPlan)
       setIsPaid(true)
       setIsDemo(true)
+      setReport(DEMO_REPORT as ReportData)
+      setStep('report')
+      if (demoPlan === 'full-audit') {
+        setInitialPhotoResults(DEMO_PHOTO_RESULT)
+        setInitialPhotoPreviews(DEMO_PHOTO_PREVIEWS)
+      }
       finishHydrating()
-      analyze(DEMO_LISTING, null, demoPlan)
       return
     }
 
@@ -439,7 +444,10 @@ export default function Home() {
     setIsPaid(true)
     setIsDemo(true)
     setActivePlan('full-audit')
-    analyze(DEMO_LISTING, null, 'full-audit')
+    setReport(DEMO_REPORT as ReportData)
+    setStep('report')
+    setInitialPhotoResults(DEMO_PHOTO_RESULT)
+    setInitialPhotoPreviews(DEMO_PHOTO_PREVIEWS)
   }
 
   function reset() {
