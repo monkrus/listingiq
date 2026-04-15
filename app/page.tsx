@@ -449,11 +449,17 @@ export default function Home() {
     localStorage.removeItem('listingiq_photo_previews')
   }
 
-  // Hydrating: returning user (email re-access, saved report, demo) — show a minimal
-  // loading placeholder instead of the input form to avoid a flash before the report mounts.
+  // Hydrating: returning user (email re-access, saved report) — show branded
+  // placeholder instead of the input form to avoid a flash before the report mounts.
   if (hydrating && !report) return (
-    <main className="min-h-screen flex items-center justify-center" style={{ background: '#F7F6F3' }}>
-      <div className="w-10 h-10 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin" />
+    <main className="min-h-screen py-12" style={{ background: '#F7F6F3' }}>
+      <div className="max-w-2xl mx-auto px-4 text-center">
+        <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-2">
+          ListingIQ · Airbnb Optimizer
+        </div>
+        <p className="text-sm text-stone-400 mt-6">Loading your report...</p>
+        <div className="w-8 h-8 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin mx-auto mt-4" />
+      </div>
     </main>
   )
 
