@@ -49,8 +49,10 @@ export async function POST(req: NextRequest) {
     // Retrieve email from Stripe session (also validates the session exists)
     const session = await stripe.checkout.sessions.retrieve(sessionId)
 
-    // Verify payment was completed
-    if (session.payment_status !== 'paid') {
+    // Verify checkout was completed. Use session.status (not payment_status)
+    // because manual capture flow keeps payment_status as 'unpaid' until the
+    // PI is captured, which may not have propagated yet when this runs.
+    if (session.status !== 'complete') {
       return NextResponse.json({ sent: false, reason: 'not_paid' }, { status: 403 })
     }
 
