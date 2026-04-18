@@ -382,12 +382,12 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
 
           {/* Guest persona */}
           <SectionCard title="Guest persona match" score={d.personaScore} allowWrap>
-            <View style={{ marginBottom: 10 }}>
+            <View style={{ marginBottom: 10 }} wrap={false}>
               <Text style={[s.rowItemText, { lineHeight: 1.6 }]}>
                 Primary guest type: <Text style={s.boldText}>{d.primaryPersona}</Text>
               </Text>
             </View>
-            <ProblemTags items={d.personaProblems} />
+            <RowItems items={d.personaProblems} dotColor={C.red} />
             <View style={s.suggestionBox}><Text style={s.suggestionText}>{d.personaSuggestion}</Text></View>
           </SectionCard>
 
