@@ -58,6 +58,12 @@ export function getPlans(): Record<string, PlanConfig> {
       description: 'Full audit + photo analysis + PDF',
       popular: true,
     },
+    'full-audit-upgrade': {
+      name: 'Full Audit Upgrade',
+      price: 2000,
+      priceId: process.env.STRIPE_PRICE_FULL_AUDIT_UPGRADE!,
+      description: 'Upgrade from Quick Score to Full Audit',
+    },
   }
 }
 

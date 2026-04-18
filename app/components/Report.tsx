@@ -17,6 +17,7 @@ interface Props {
   listingUrl?: string
   initialPhotoResults?: PhotoAnalysisResult | null
   initialPhotoPreviews?: string[] | null
+  onUpgrade?: () => void
 }
 
 const ProblemTag = ({ text }: { text: string }) => (
@@ -45,7 +46,7 @@ function scoreColor(s: number) {
   return s >= 80 ? '#4a7c2f' : s >= 60 ? '#b45309' : '#b91c1c'
 }
 
-export default function Report({ data: rawData, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null }: Props) {
+export default function Report({ data: rawData, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null, onUpgrade }: Props) {
   // Ensure all array fields have safe defaults to prevent crashes from incomplete AI responses
   const d: ReportData = {
     ...rawData,
@@ -355,12 +356,12 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
           </p>
           <div className="max-w-xs mx-auto">
             <div className="rounded-xl p-4 text-center border-2 border-stone-900">
-              <div style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-900 mb-1">Full Audit</div>
+              <div style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-900 mb-1">Upgrade to Full Audit</div>
               <div className="mb-2">
-                <span style={{ fontFamily: 'var(--font-syne)' }} className="text-xl font-bold text-stone-900">$49</span>
+                <span style={{ fontFamily: 'var(--font-syne)' }} className="text-xl font-bold text-stone-900">$20</span>
+                <span className="text-xs text-stone-400 ml-1 line-through">$49</span>
               </div>
               <ul className="text-xs text-stone-600 space-y-1 mb-3 text-left inline-block">
-                <li className="flex gap-1.5"><span className="text-green-600">✓</span>Everything in Quick Score</li>
                 <li className="flex gap-1.5"><span className="text-green-600">✓</span>AI photo analysis (up to 10 photos)</li>
                 <li className="flex gap-1.5"><span className="text-green-600">✓</span>Photo reorder + retake instructions</li>
                 <li className="flex gap-1.5"><span className="text-green-600">✓</span>Gallery order suggestion</li>
@@ -375,18 +376,18 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
                 </button>
               ) : (
                 <button
-                  onClick={() => window.location.href = '/pricing'}
+                  onClick={() => onUpgrade ? onUpgrade() : window.location.href = '/pricing'}
                   style={{ fontFamily: 'var(--font-syne)' }}
                   className="w-full py-2.5 bg-stone-900 text-white text-xs font-bold rounded-lg hover:bg-stone-700 transition-colors tracking-wide"
                 >
-                  Get Full Audit · $49
+                  Upgrade · $20
                 </button>
               )}
             </div>
           </div>
           {!isDemo && (
             <p className="text-xs text-stone-600 text-center mt-3">
-              Separate purchase · Secure checkout via Stripe
+              Pay the difference · Secure checkout via Stripe
             </p>
           )}
         </div>

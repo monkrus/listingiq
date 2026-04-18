@@ -55,7 +55,9 @@ export default function Home() {
     if (params.get('demo')) return false // demo goes straight to loading, no hydration needed
     if (params.get('new') === '1') return false
     try {
-      return !!localStorage.getItem('listingiq_report')
+      // Only auto-restore report within the same tab session (survives refresh,
+      // but not closing the tab / opening a new one)
+      return !!sessionStorage.getItem('listingiq_active') && !!localStorage.getItem('listingiq_report')
     } catch {
       return false
     }
@@ -101,6 +103,8 @@ export default function Home() {
             if (cacheData.found) {
               const reportData = cacheData.reportData as ReportData
               setReport(reportData)
+              setStep('report')
+              sessionStorage.setItem('listingiq_active', '1')
               finishHydrating()
               const cachedPlan = cacheData.plan || planParam || 'quick-score'
               setActivePlan(cachedPlan)
@@ -182,12 +186,14 @@ export default function Home() {
       return
     }
 
-    // Restore saved report from localStorage (returning user, tab was closed)
-    const savedReport = localStorage.getItem('listingiq_report')
+    // Restore saved report only within the same tab session (refresh),
+    // not when opening the site fresh in a new tab
+    const savedReport = sessionStorage.getItem('listingiq_active') ? localStorage.getItem('listingiq_report') : null
     if (savedReport) {
       try {
         const parsed = JSON.parse(savedReport)
         setReport(parsed)
+        setStep('report')
         const savedUrl = localStorage.getItem('listingiq_url')
         if (savedUrl) setUrl(savedUrl)
         // Restore plan and photo results so Full Audit customers see the full report
@@ -342,6 +348,13 @@ export default function Home() {
 
       setReport(data)
       setStep('report')
+      // Clean checkout params from URL so a browser refresh restores
+      // from localStorage instead of re-running analysis
+      if (window.location.search) {
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+      // Mark this tab session as active so refresh restores the report
+      sessionStorage.setItem('listingiq_active', '1')
       if (!isDemo) {
         localStorage.setItem('listingiq_report', JSON.stringify(data))
         localStorage.setItem('listingiq_plan', plan)
@@ -406,7 +419,7 @@ export default function Home() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Upload failed')
       setPhotoUploadId(data.uploadId)
-      goToPayment('full-audit', data.uploadId)
+      goToPayment(selectedPlan, data.uploadId)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Photo upload failed')
       setStep('input') // Reset to input step so the error is visible
@@ -426,6 +439,15 @@ export default function Home() {
     localStorage.setItem('listingiq_checkout_pending', '1')
     const uploadParam = uploadId ? `&uploadId=${uploadId}` : ''
     window.location.href = `/api/checkout-redirect?plan=${planKey}&url=${encodeURIComponent(url.trim())}${uploadParam}`
+  }
+
+  function handleUpgradeToFullAudit() {
+    setSelectedPlan('full-audit-upgrade')
+    setActivePlan('full-audit')
+    setReport(null)
+    setStep('photos')
+    // Scroll to top so user sees the photo upload step
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function handleDemo() {
@@ -472,7 +494,7 @@ export default function Home() {
   )
 
   // Report view
-  if (report) return (
+  if (report && step === 'report') return (
     <main className="min-h-screen py-12" style={{ background: '#F7F6F3' }}>
       <div className="max-w-2xl mx-auto px-4 mb-6 text-center">
         <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-2">
@@ -490,6 +512,7 @@ export default function Home() {
         listingUrl={url}
         initialPhotoResults={initialPhotoResults}
         initialPhotoPreviews={initialPhotoPreviews}
+        onUpgrade={handleUpgradeToFullAudit}
       />
     </main>
   )
@@ -613,7 +636,7 @@ export default function Home() {
           {step === 'photos' && (
             <PhotoUploadStep
               onContinue={handlePhotosContinue}
-              onSkip={() => goToPayment('full-audit')}
+              onSkip={() => goToPayment(selectedPlan)}
               uploading={photoUploading}
             />
           )}

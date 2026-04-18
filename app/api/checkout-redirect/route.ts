@@ -5,16 +5,16 @@ export async function GET(req: NextRequest) {
   const plan = req.nextUrl.searchParams.get('plan') || 'quick-score'
   const listingUrl = req.nextUrl.searchParams.get('url') || ''
   const uploadId = req.nextUrl.searchParams.get('uploadId') || ''
-  const upgrade = req.nextUrl.searchParams.get('upgrade') === '1'
   // Never use client-provided Origin header — hardcode the base URL
   const origin = process.env.NEXT_PUBLIC_BASE_URL || req.nextUrl.origin
 
+  // Upgrades charge less but run the same full-audit analysis
+  const isUpgrade = plan === 'full-audit-upgrade'
+  const effectivePlan = isUpgrade ? 'full-audit' : plan
+
   // Mock mode — skip Stripe
   if (process.env.USE_MOCK_API === 'true') {
-    if (upgrade && listingUrl) {
-      return NextResponse.redirect(`${origin}/?paid=1&plan=${plan}`)
-    }
-    return NextResponse.redirect(`${origin}/success?plan=${plan}&paid=1`)
+    return NextResponse.redirect(`${origin}/success?plan=${effectivePlan}&paid=1`)
   }
 
   // Production — create a real Stripe Checkout session
@@ -27,9 +27,9 @@ export async function GET(req: NextRequest) {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{ price: planConfig.priceId, quantity: 1 }],
-      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}&plan=${plan}`,
+      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}&plan=${effectivePlan}`,
       cancel_url: `${origin}${listingUrl ? `/?url=${encodeURIComponent(listingUrl)}` : '/pricing'}`,
-      metadata: { planKey: plan, listingUrl, ...(uploadId ? { photoUploadId: uploadId } : {}) },
+      metadata: { planKey: effectivePlan, listingUrl, ...(uploadId ? { photoUploadId: uploadId } : {}) },
       allow_promotion_codes: true,
       // Manual capture: card is authorized on payment, but only captured after
       // a successful listing analysis. If scrape fails, we cancel the PI and
