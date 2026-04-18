@@ -337,7 +337,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
                     <img src={src} className="w-full h-16 object-cover rounded-xl border border-stone-200" alt="" />
                     <button
                       onClick={e => { e.stopPropagation(); removePhoto(i) }}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-stone-800 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center"
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-stone-800 text-white rounded-full text-xs flex items-center justify-center sm:hidden sm:group-hover:flex"
                     >×</button>
                     <span className="absolute bottom-1 left-1 bg-stone-900/60 text-white text-xs px-1 rounded">{i + 1}</span>
                   </div>
@@ -426,7 +426,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
               </p>
               <p className="text-xs text-blue-800 mb-3">Drag your Airbnb photos into this order for best results:</p>
               <div className="flex gap-2 overflow-x-auto pb-1 pt-2 pl-2">
-                {result.suggestedOrder.map((photoIndex, pos) => (
+                {result.suggestedOrder.filter(idx => idx >= 0 && idx < previews.length).map((photoIndex, pos) => (
                   <div key={pos} className="flex-shrink-0 text-center">
                     <div className="relative">
                       <img src={previews[photoIndex]} className="w-24 h-24 object-cover rounded-lg border border-blue-200" alt="" />

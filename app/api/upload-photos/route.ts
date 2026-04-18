@@ -31,9 +31,6 @@ export async function POST(req: NextRequest) {
     let totalSize = 0
 
     for (const file of files) {
-      if (!ALLOWED_TYPES.includes(file.type)) {
-        return NextResponse.json({ error: `Invalid file type: ${file.type}. Allowed: JPG, PNG, WebP` }, { status: 400 })
-      }
       if (file.size > MAX_FILE_SIZE) {
         return NextResponse.json({ error: `${file.name} is too large (max 4 MB per photo).` }, { status: 400 })
       }

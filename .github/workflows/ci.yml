@@ -15,6 +15,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: rm package-lock.json && npm install
+      - run: npm ci
       - run: npx tsc --noEmit
       - run: npx vitest run

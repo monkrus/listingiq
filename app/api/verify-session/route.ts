@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/app/lib/stripe'
+import { rateLimit } from '@/app/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const { limited } = rateLimit(ip, 10, 60_000)
+  if (limited) {
+    return NextResponse.json({ verified: false, error: 'Too many requests' }, { status: 429 })
+  }
+
   const sessionId = req.nextUrl.searchParams.get('session_id')
 
   if (!sessionId) {

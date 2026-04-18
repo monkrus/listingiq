@@ -27,6 +27,11 @@ const sessions = new Map<string, SessionUsage>()
 // the credit check before either writes back to the Map.
 const locks = new Map<string, Promise<SessionUsage>>()
 
+// Per-session mutex for credit operations: prevents TOCTOU races where
+// two concurrent requests both read count=0, both increment, and both
+// return allowed=true (double-spend).
+const creditLocks = new Map<string, Promise<unknown>>()
+
 const PLAN_LIMITS: Record<string, { analyze: number; photo: number }> = {
   'quick-score': { analyze: 1, photo: 0 },
   'full-audit':  { analyze: 1, photo: 1 },
@@ -108,25 +113,45 @@ async function markUsedInStripe(sessionId: string, field: 'analyze_used' | 'phot
 }
 
 /**
+ * Serialize an async operation per session to prevent TOCTOU races.
+ * Concurrent callers for the same session wait for the previous op to finish.
+ */
+async function withCreditLock<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = creditLocks.get(sessionId) ?? Promise.resolve()
+  const next = prev.then(fn, fn) // run fn after previous completes (even on error)
+  creditLocks.set(sessionId, next)
+  try {
+    return await next
+  } finally {
+    // Clean up if we're the last in the chain
+    if (creditLocks.get(sessionId) === next) {
+      creditLocks.delete(sessionId)
+    }
+  }
+}
+
+/**
  * Check and consume an analysis credit for this session.
  * Returns cacheOnly: true when reaccess is granted for an already-used credit —
  * the caller MUST only return cached data and not trigger a new API call.
  */
 export async function useAnalysisCredit(sessionId: string, plan: string, opts?: { reaccess?: boolean }): Promise<{ allowed: boolean; cacheOnly?: boolean; error?: string }> {
-  const usage = await ensureSessionFromStripe(sessionId, plan)
-  const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['quick-score']
+  return withCreditLock(sessionId, async () => {
+    const usage = await ensureSessionFromStripe(sessionId, plan)
+    const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['quick-score']
 
-  if (usage.analyzeCount >= limits.analyze) {
-    // Allow re-access from email link — but only for cached data
-    if (opts?.reaccess) {
-      return { allowed: true, cacheOnly: true }
+    if (usage.analyzeCount >= limits.analyze) {
+      // Allow re-access from email link — but only for cached data
+      if (opts?.reaccess) {
+        return { allowed: true, cacheOnly: true }
+      }
+      return { allowed: false, error: 'This payment session has already been used for an analysis. Please purchase a new report.' }
     }
-    return { allowed: false, error: 'This payment session has already been used for an analysis. Please purchase a new report.' }
-  }
 
-  usage.analyzeCount++
-  await markUsedInStripe(sessionId, 'analyze_used')
-  return { allowed: true }
+    usage.analyzeCount++
+    await markUsedInStripe(sessionId, 'analyze_used')
+    return { allowed: true }
+  })
 }
 
 /**
@@ -134,22 +159,24 @@ export async function useAnalysisCredit(sessionId: string, plan: string, opts?: 
  * Returns cacheOnly: true when reaccess is granted for an already-used credit.
  */
 export async function usePhotoCredit(sessionId: string, plan: string, opts?: { reaccess?: boolean }): Promise<{ allowed: boolean; cacheOnly?: boolean; error?: string }> {
-  const usage = await ensureSessionFromStripe(sessionId, plan)
-  const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['quick-score']
+  return withCreditLock(sessionId, async () => {
+    const usage = await ensureSessionFromStripe(sessionId, plan)
+    const limits = PLAN_LIMITS[plan] || PLAN_LIMITS['quick-score']
 
-  if (limits.photo === 0) {
-    return { allowed: false, error: 'Photo analysis is not included in your plan.' }
-  }
-
-  if (usage.photoCount >= limits.photo) {
-    // Allow re-access — but only for cached data
-    if (opts?.reaccess) {
-      return { allowed: true, cacheOnly: true }
+    if (limits.photo === 0) {
+      return { allowed: false, error: 'Photo analysis is not included in your plan.' }
     }
-    return { allowed: false, error: 'Photo analysis has already been used for this session. Please purchase a new report.' }
-  }
 
-  usage.photoCount++
-  await markUsedInStripe(sessionId, 'photo_used')
-  return { allowed: true }
+    if (usage.photoCount >= limits.photo) {
+      // Allow re-access — but only for cached data
+      if (opts?.reaccess) {
+        return { allowed: true, cacheOnly: true }
+      }
+      return { allowed: false, error: 'Photo analysis has already been used for this session. Please purchase a new report.' }
+    }
+
+    usage.photoCount++
+    await markUsedInStripe(sessionId, 'photo_used')
+    return { allowed: true }
+  })
 }

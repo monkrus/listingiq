@@ -20,11 +20,13 @@ export async function GET() {
     checks.supabase = 'not_configured'
   }
 
-  // Check required env vars are present (not their values)
-  checks.anthropic = process.env.ANTHROPIC_API_KEY ? 'configured' : 'missing'
-  checks.stripe = process.env.STRIPE_SECRET_KEY ? 'configured' : 'missing'
+  // Check required env vars internally — don't expose config state to public
+  const anthropicOk = !!process.env.ANTHROPIC_API_KEY
+  const stripeOk = !!process.env.STRIPE_SECRET_KEY
+  if (!anthropicOk) console.warn('[health] ANTHROPIC_API_KEY not configured')
+  if (!stripeOk) console.warn('[health] STRIPE_SECRET_KEY not configured')
 
-  const healthy = checks.status === 'ok' && checks.anthropic === 'configured' && checks.stripe === 'configured'
+  const healthy = checks.status === 'ok' && anthropicOk && stripeOk
 
   return NextResponse.json(checks, { status: healthy ? 200 : 503 })
 }

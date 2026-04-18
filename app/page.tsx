@@ -190,6 +190,13 @@ export default function Home() {
         setReport(parsed)
         const savedUrl = localStorage.getItem('listingiq_url')
         if (savedUrl) setUrl(savedUrl)
+        // Restore plan and photo results so Full Audit customers see the full report
+        const savedPlan = localStorage.getItem('listingiq_plan')
+        if (savedPlan) setActivePlan(savedPlan)
+        const savedPhotos = localStorage.getItem('listingiq_photo_results')
+        if (savedPhotos) setInitialPhotoResults(JSON.parse(savedPhotos))
+        const savedPreviews = localStorage.getItem('listingiq_photo_previews')
+        if (savedPreviews) setInitialPhotoPreviews(JSON.parse(savedPreviews))
         finishHydrating()
         return
       } catch {}
@@ -402,6 +409,7 @@ export default function Home() {
       goToPayment('full-audit', data.uploadId)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Photo upload failed')
+      setStep('input') // Reset to input step so the error is visible
     } finally {
       setPhotoUploading(false)
     }
@@ -605,6 +613,7 @@ export default function Home() {
           {step === 'photos' && (
             <PhotoUploadStep
               onContinue={handlePhotosContinue}
+              onSkip={() => goToPayment('full-audit')}
               uploading={photoUploading}
             />
           )}

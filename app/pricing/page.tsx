@@ -46,6 +46,8 @@ export default function PricingPage() {
     localStorage.setItem('listingiq_checkout_pending', '1')
     // Redirect to Stripe checkout via GET endpoint
     window.location.href = `/api/checkout-redirect?plan=${planKey}`
+    // Reset loading state if user navigates back (e.g. redirect fails or browser back)
+    window.addEventListener('pageshow', () => setLoading(null), { once: true })
   }
 
   return (

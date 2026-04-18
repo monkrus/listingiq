@@ -7,6 +7,9 @@ create table if not exists public.daily_rate_limits (
   primary key (ip, route, day)
 );
 
+-- Block all direct client access — only server-side RPCs should touch this table
+alter table public.daily_rate_limits enable row level security;
+
 -- Auto-delete rows older than 3 days to prevent unbounded growth
 create index if not exists idx_daily_rate_limits_day on daily_rate_limits (day);
 

@@ -22,6 +22,7 @@ export default function ReportSection({ title, score, children, defaultOpen = fa
       <button
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-stone-50 transition-colors text-left"
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
       >
         <div className="flex items-center gap-3">
           <span style={{ fontFamily: 'var(--font-syne)' }} className="font-bold text-sm text-stone-900">

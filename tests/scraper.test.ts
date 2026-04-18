@@ -21,6 +21,7 @@ import { scrapeAirbnbListing, isValidAirbnbUrl } from '@/app/lib/scraper'
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('APIFY_ENABLED', 'false')
+  vi.stubEnv('AIRBNB_API_KEY', 'test-api-key')
 })
 
 // ── URL validation ──

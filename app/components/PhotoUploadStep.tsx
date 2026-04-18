@@ -7,10 +7,11 @@ const MAX_FILE_SIZE = 4 * 1024 * 1024
 
 interface Props {
   onContinue: (files: File[], previews: string[]) => void
+  onSkip?: () => void
   uploading?: boolean
 }
 
-export default function PhotoUploadStep({ onContinue, uploading }: Props) {
+export default function PhotoUploadStep({ onContinue, onSkip, uploading }: Props) {
   const [previews, setPreviews] = useState<string[]>([])
   const [files, setFiles] = useState<File[]>([])
   const [error, setError] = useState('')
@@ -114,7 +115,7 @@ export default function PhotoUploadStep({ onContinue, uploading }: Props) {
                 <img src={src} className="w-full h-16 object-cover rounded-xl border border-stone-200" alt="" />
                 <button
                   onClick={() => removePhoto(i)}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-stone-800 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-stone-800 text-white rounded-full text-xs flex items-center justify-center sm:hidden sm:group-hover:flex"
                 >×</button>
                 <span className="absolute bottom-1 left-1 bg-stone-900/60 text-white text-xs px-1 rounded">{i + 1}</span>
               </div>
@@ -142,6 +143,14 @@ export default function PhotoUploadStep({ onContinue, uploading }: Props) {
       >
         {uploading ? 'Uploading photos...' : 'Continue to payment'}
       </button>
+      {onSkip && !uploading && (
+        <button
+          onClick={onSkip}
+          className="w-full py-2 text-xs text-stone-500 hover:text-stone-700 underline mt-2"
+        >
+          Skip — use listing photos instead
+        </button>
+      )}
     </div>
   )
 }

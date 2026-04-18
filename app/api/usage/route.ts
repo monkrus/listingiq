@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getProfile, getReportsThisMonth, getPlanLimit } from '@/app/lib/supabase'
+import { checkOrigin } from '@/app/lib/check-origin'
+import { rateLimit } from '@/app/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
+  const originBlock = checkOrigin(req)
+  if (originBlock) return originBlock
+
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const { limited } = rateLimit(ip, 10, 60_000)
+  if (limited) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  }
+
   const userId = req.nextUrl.searchParams.get('userId')
   if (!userId) return NextResponse.json({ canAnalyze: false, reason: 'Not authenticated' })
 

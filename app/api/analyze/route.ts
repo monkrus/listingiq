@@ -240,6 +240,12 @@ export async function POST(req: NextRequest) {
     const body: ListingInput & { userId?: string; sessionId?: string; plan?: string; reaccess?: boolean } = await req.json()
     const plan = body.plan || 'quick-score'
 
+    // Enforce input length limits (defense-in-depth against prompt injection and token overflow)
+    if (body.title && body.title.length > 300) body.title = body.title.slice(0, 300)
+    if (body.description && body.description.length > 10_000) body.description = body.description.slice(0, 10_000)
+    if (body.amenities) body.amenities = body.amenities.slice(0, 100)
+    if (body.reviews) body.reviews = body.reviews.slice(0, 50).map(r => r.slice(0, 1000))
+
     // Demo mode — always allow so the demo button works regardless of mock/live mode
     const isDemo = body.isDemo === true
 
