@@ -1,10 +1,9 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 function SuccessContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const plan = searchParams.get('plan') ?? 'quick-score'
   const sessionId = searchParams.get('session_id')
@@ -14,7 +13,7 @@ function SuccessContent() {
   useEffect(() => {
     // Mock mode — skip verification
     if (mockPaid === '1') {
-      router.replace(`/?paid=1&plan=${plan}`)
+      window.location.replace(`/?paid=1&plan=${plan}`)
       return
     }
 
@@ -37,13 +36,16 @@ function SuccessContent() {
           const urlParam = data.listingUrl ? `&url=${encodeURIComponent(data.listingUrl)}` : ''
           const photoParam = data.photoUploadId ? `&photoUploadId=${data.photoUploadId}` : ''
           const checkoutParam = isCheckout ? '&checkout=1' : ''
-          router.replace(`/?paid=1&plan=${data.plan || plan}${urlParam}${photoParam}${checkoutParam}`)
+          // Use window.location.replace for a full page navigation so
+          // the Home component's useState initializer reads the correct
+          // URL params (paid=1) on first render — prevents flash of input form.
+          window.location.replace(`/?paid=1&plan=${data.plan || plan}${urlParam}${photoParam}${checkoutParam}`)
         } else {
           setError(data.error || 'Payment could not be verified.')
         }
       })
       .catch(() => setError('Something went wrong verifying your payment.'))
-  }, [sessionId, plan, mockPaid, router])
+  }, [sessionId, plan, mockPaid])
 
   return error ? (
     <div className="text-center">
@@ -53,16 +55,29 @@ function SuccessContent() {
       </a>
     </div>
   ) : (
-    <p className="text-stone-500 text-sm">Verifying payment...</p>
+    <div className="text-center">
+      <p className="text-sm text-stone-400">Loading your report...</p>
+      <div className="w-8 h-8 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin mx-auto mt-4" />
+    </div>
   )
 }
 
 export default function SuccessPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4" style={{ background: '#F7F6F3' }}>
-      <Suspense fallback={<p className="text-stone-500 text-sm">Loading...</p>}>
-        <SuccessContent />
-      </Suspense>
+      <div className="max-w-2xl mx-auto px-4 text-center">
+        <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-6">
+          ListingIQ · Airbnb Optimizer
+        </div>
+        <Suspense fallback={
+          <div className="text-center">
+            <p className="text-sm text-stone-400">Loading your report...</p>
+            <div className="w-8 h-8 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin mx-auto mt-4" />
+          </div>
+        }>
+          <SuccessContent />
+        </Suspense>
+      </div>
     </main>
   )
 }
