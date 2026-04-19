@@ -655,7 +655,7 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <p className="text-xs text-stone-400 mt-5">
+              <p className="text-xs text-stone-400 mt-5 text-center">
                 {activePlan === 'full-audit'
                   ? 'Full Audit typically takes up to 2 minutes'
                   : 'Quick Score typically takes up to 60 seconds'}
