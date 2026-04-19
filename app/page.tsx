@@ -645,21 +645,23 @@ export default function Home() {
           {step === 'loading' && (
             <div className="py-6 text-center">
               <div className="w-10 h-10 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin mx-auto mb-5" />
-              <ul className="inline-block text-left space-y-1.5">
-                {loadingSteps.map((s, i) => (
-                  <li key={i} className="text-sm transition-colors duration-300" style={{
-                    color: i < stepIndex ? '#a8a29e' : i === stepIndex ? '#1c1917' : '#d6d3d1',
-                    fontWeight: i === stepIndex ? 500 : 400,
-                  }}>
-                    {i < stepIndex ? '✓ ' : i === stepIndex ? '› ' : '  '}{s}
-                  </li>
-                ))}
-              </ul>
-              <p className="text-xs text-stone-400 mt-5 text-center">
-                {activePlan === 'full-audit'
-                  ? 'Full Audit typically takes up to 2 minutes'
-                  : 'Quick Score typically takes up to 60 seconds'}
-              </p>
+              <div className="inline-block text-left">
+                <ul className="space-y-1.5">
+                  {loadingSteps.map((s, i) => (
+                    <li key={i} className="text-sm transition-colors duration-300" style={{
+                      color: i < stepIndex ? '#a8a29e' : i === stepIndex ? '#1c1917' : '#d6d3d1',
+                      fontWeight: i === stepIndex ? 500 : 400,
+                    }}>
+                      {i < stepIndex ? '✓ ' : i === stepIndex ? '› ' : '  '}{s}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-stone-400 mt-3">
+                  {activePlan === 'full-audit'
+                    ? 'Full Audit typically takes up to 2 minutes'
+                    : 'Quick Score typically takes up to 60 seconds'}
+                </p>
+              </div>
             </div>
           )}
         </div>
