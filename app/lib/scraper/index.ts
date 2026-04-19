@@ -163,7 +163,7 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     // Extract photo URLs and count
     let photoCount = 0
     let photoUrls: string[] = []
-    const photoMatches = dataStr.match(/"baseUrl":\s*"(https:\/\/a0\.muscache\.com[^"]+)"/g)
+    const photoMatches = dataStr.match(/"baseUrl":\s*"(https:\/\/a0\.muscache\.com\/im\/[^"]+)"/g)
     if (photoMatches) {
       const uniqueUrls = Array.from(new Set(
         photoMatches.map(m => m.match(/"baseUrl":\s*"([^"]+)"/)?.[1] ?? '').filter(Boolean)
@@ -314,7 +314,7 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
       }
 
       if (!photoCount) {
-        const pm = dataStr.match(/"baseUrl":\s*"(https:\/\/a0\.muscache\.com[^"]+)"/g)
+        const pm = dataStr.match(/"baseUrl":\s*"(https:\/\/a0\.muscache\.com\/im\/[^"]+)"/g)
         if (pm) {
           const uniqueUrls = Array.from(new Set(
             pm.map(m => m.match(/"baseUrl":\s*"([^"]+)"/)?.[1] ?? '').filter(Boolean)
@@ -342,7 +342,7 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
   if (!description && metaDescription) description = metaDescription
   if (!photoCount) {
     // Count unique muscache URLs as a rough photo count estimate
-    const imgMatches = html.match(/https:\/\/a0\.muscache\.com\/[^"'\s)]+/g)
+    const imgMatches = html.match(/https:\/\/a0\.muscache\.com\/im\/[^"'\s)]+/g)
     photoCount = imgMatches ? new Set(imgMatches).size : 0
   }
 

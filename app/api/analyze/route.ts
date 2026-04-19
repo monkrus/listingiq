@@ -12,6 +12,7 @@ import { stripe } from '@/app/lib/stripe'
 import { estimateImprovement } from '@/app/lib/estimate-improvement'
 import { validateReport } from '@/app/lib/validate-report'
 import { logAnalyticsEvent } from '@/app/lib/analytics'
+import { triggerReportEmail } from '@/app/lib/trigger-report-email'
 
 /**
  * Capture a manually-authorized payment intent. No-op if already captured
@@ -425,6 +426,15 @@ export async function POST(req: NextRequest) {
     // Report delivered successfully — capture the authorized payment.
     await capturePaymentIntent(paymentIntentId, alreadyCaptured)
     settled = true
+
+    // Server-side email for Quick Score (no photo step follows).
+    // Full Audit email is sent from analyze-photos after photos are cached.
+    // Dedup prevents double-send if client also triggers the email.
+    if (body.sessionId && !isDemo && !body.reaccess && plan === 'quick-score') {
+      triggerReportEmail(body.sessionId).catch(err =>
+        console.warn('[analyze] Failed to trigger report email:', err)
+      )
+    }
 
     logAnalyticsEvent({ route: 'analyze', plan, success: true, duration_ms: Date.now() - startTime, is_demo: isDemo, is_reaccess: !!body.reaccess })
     return NextResponse.json(fullReport)

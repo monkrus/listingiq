@@ -10,6 +10,7 @@ import { validateImageFile, validateBase64Image, detectImageType } from '@/app/l
 import { isValidPhotoUrl } from '@/app/lib/validation'
 import { resizeForVision } from '@/app/lib/resize-image'
 import { logAnalyticsEvent } from '@/app/lib/analytics'
+import { triggerReportEmail } from '@/app/lib/trigger-report-email'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -466,6 +467,14 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
         await updateCachedPhotos(sessionId, result, previews)
       } catch (err) {
         console.warn('[photo-analyze] Failed to cache photos:', err)
+      }
+
+      // Server-side email for Full Audit (photos now cached).
+      // Dedup prevents double-send if client also triggers the email.
+      if (!USE_MOCK && !reaccess) {
+        triggerReportEmail(sessionId).catch(err =>
+          console.warn('[analyze-photos] Failed to trigger report email:', err)
+        )
       }
     }
 
