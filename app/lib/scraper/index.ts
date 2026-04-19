@@ -668,42 +668,45 @@ export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> 
     }
   }
 
-  // Retry up to 2 times with a delay if all tiers fail (handles transient
-  // blocks from datacenter IPs — each attempt uses a fresh User-Agent)
-  let lastResult: ScrapedListing | null = null
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) {
-      console.log(`[scraper] Retry attempt ${attempt + 1} after ${attempt * 2}s delay...`)
-      await sleep(attempt * 2000)
-    }
-
-    // Tier 1: API-based (fast — ~200ms when hash is current)
-    const apiResult = await apiScrape(url)
-    if (apiResult.scrapeSuccess) {
-      if (listingId) scrapeCache.set(listingId, { data: apiResult, ts: Date.now() })
-      return apiResult
-    }
-    console.warn(`[scraper] API scrape failed (attempt ${attempt + 1}):`, apiResult.scrapeError)
-
-    // Tier 2: Apify — reliable but slower, only when explicitly enabled
-    if (process.env.APIFY_ENABLED === 'true' && process.env.APIFY_API_TOKEN) {
-      const apifyResult = await apifyScrape(url)
-      if (apifyResult.scrapeSuccess) {
-        if (listingId) scrapeCache.set(listingId, { data: apifyResult, ts: Date.now() })
-        return apifyResult
-      }
-      console.warn(`[scraper] Apify scrape failed (attempt ${attempt + 1}):`, apifyResult.scrapeError)
-    }
-
-    // Tier 3: HTML fetch fallback
-    const fetchResult = await fetchScrape(url)
-    if (fetchResult.scrapeSuccess) {
-      if (listingId) scrapeCache.set(listingId, { data: fetchResult, ts: Date.now() })
-      return fetchResult
-    }
-    console.warn(`[scraper] Fetch scrape failed (attempt ${attempt + 1}):`, fetchResult.scrapeError)
-    lastResult = fetchResult
+  const cache = (data: ScrapedListing) => {
+    if (listingId) scrapeCache.set(listingId, { data, ts: Date.now() })
+    return data
   }
 
-  return lastResult!
+  // Tier 1: API-based (fast — ~200ms when hash is current)
+  const apiResult = await apiScrape(url)
+  if (apiResult.scrapeSuccess) return cache(apiResult)
+  const apiErr = apiResult.scrapeError ?? ''
+  console.warn('[scraper] API scrape failed:', apiErr)
+
+  // If rate-limited (429), skip HTML fetch too (same IP) — go straight to Apify
+  const isRateLimited = apiErr.includes('429')
+
+  if (!isRateLimited) {
+    // Tier 2 (when not rate-limited): HTML fetch fallback
+    const fetchResult = await fetchScrape(url)
+    if (fetchResult.scrapeSuccess) return cache(fetchResult)
+    console.warn('[scraper] Fetch scrape failed:', fetchResult.scrapeError)
+  } else {
+    console.warn('[scraper] Rate-limited (429) — skipping HTML fetch, trying Apify...')
+  }
+
+  // Tier 3: Apify — uses residential proxies, bypasses IP blocks
+  if (process.env.APIFY_ENABLED === 'true' && process.env.APIFY_API_TOKEN) {
+    const apifyResult = await apifyScrape(url)
+    if (apifyResult.scrapeSuccess) return cache(apifyResult)
+    console.warn('[scraper] Apify scrape failed:', apifyResult.scrapeError)
+    return apifyResult
+  }
+
+  // Last resort if not rate-limited: retry HTML fetch once after a delay
+  if (!isRateLimited) {
+    await sleep(3000)
+    const retryResult = await fetchScrape(url)
+    if (retryResult.scrapeSuccess) return cache(retryResult)
+    console.warn('[scraper] Fetch retry failed:', retryResult.scrapeError)
+    return retryResult
+  }
+
+  return apiResult
 }
