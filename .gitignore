@@ -24,6 +24,9 @@ Thumbs.db
 # backups (contain customer data)
 backups/
 
+# test
+test-results/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
