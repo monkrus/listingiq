@@ -53,6 +53,19 @@ function extractListingId(url: string): string | null {
   return match?.[1] ?? null
 }
 
+/** Rotate User-Agents to reduce chance of IP-based blocking from datacenters */
+const USER_AGENTS = [
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0',
+]
+function randomUA(): string { return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)] }
+
+/** Sleep for a given number of milliseconds */
+function sleep(ms: number): Promise<void> { return new Promise(r => setTimeout(r, ms)) }
+
 // ---------------------------------------------------------------------------
 // Self-healing GraphQL hash discovery
 // ---------------------------------------------------------------------------
@@ -72,7 +85,7 @@ async function discoverApiHash(listingUrl: string): Promise<{ hash: string; incl
     // Step 1: Fetch the listing HTML page
     const pageRes = await fetch(listingUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': randomUA(),
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'en-US,en;q=0.9',
       },
@@ -299,8 +312,7 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     return { ...base, scrapeError: 'AIRBNB_API_KEY is not configured' }
   }
 
-  const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-  const headers = { 'User-Agent': UA, 'X-Airbnb-Api-Key': API_KEY, 'Content-Type': 'application/json' }
+  const headers = { 'User-Agent': randomUA(), 'X-Airbnb-Api-Key': API_KEY, 'Content-Type': 'application/json' }
 
   // Use cached hash if available, otherwise start with fallback
   const currentHash = cachedApiHash?.hash ?? FALLBACK_HASH
@@ -308,7 +320,9 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
 
   try {
     const apiUrl = buildApiUrl(currentHash, listingId, currentVars)
+    console.log(`[scraper:api] Fetching listing ${listingId} with hash ${currentHash.substring(0, 12)}...`)
     const res = await fetch(apiUrl, { headers })
+    console.log(`[scraper:api] Response: ${res.status}, content-length: ${res.headers.get('content-length')}`)
 
     // Check for stale hash — Airbnb returns 400 with PersistedQueryNotFound
     // or 200 with a GraphQL validation error when the hash rotates
@@ -318,6 +332,7 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     if (isStaleHash) {
       // Read body to check for PersistedQueryNotFound / ValidationError
       const body = await res.text()
+      console.log(`[scraper:api] Stale hash body preview: ${body.substring(0, 200)}`)
       if (body.includes('PersistedQueryNotFound') || body.includes('ValidationError')) {
         console.warn(`[scraper:api] Stale hash detected, discovering new hash...`)
         const discovered = await discoverApiHash(url)
@@ -344,7 +359,8 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     }
 
     if (!res.ok) {
-      console.warn(`[scraper:api] API returned ${res.status}`)
+      const errBody = await res.text().catch(() => '')
+      console.warn(`[scraper:api] API returned ${res.status}: ${errBody.substring(0, 200)}`)
       return { ...base, scrapeError: `API HTTP ${res.status}` }
     }
 
@@ -353,8 +369,10 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     const extracted = extractFromApiResponse(dataStr)
 
     if (!extracted.title && !extracted.description) {
+      console.warn(`[scraper:api] No listing data extracted. Response length: ${dataStr.length}`)
       return { ...base, scrapeError: 'API returned no listing data' }
     }
+    console.log(`[scraper:api] Success: "${extracted.title}", ${extracted.photoUrls.length} photos`)
 
     return { ...base, ...extracted, scrapeSuccess: true }
   } catch (err) {
@@ -376,9 +394,10 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
     scrapeSuccess: false,
   }
 
+  const ua = randomUA()
   const res = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': ua,
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
     },
@@ -390,6 +409,11 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
   }
 
   const html = await res.text()
+
+  // Detect Airbnb login/block page — datacenter IPs sometimes get redirected
+  if (html.length < 15000 && (html.includes('Log in') || html.includes('captcha'))) {
+    return { ...base, scrapeError: 'Blocked by Airbnb (login/captcha page)' }
+  }
 
   // --- Extract title ---
   // Prefer listingTitle from embedded data, then <title> tag (has host title), og:title last (auto-generated)
@@ -639,35 +663,47 @@ export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> 
   if (listingId) {
     const cached = scrapeCache.get(listingId)
     if (cached && Date.now() - cached.ts < SCRAPE_CACHE_TTL) {
+      console.log(`[scraper] Cache hit for listing ${listingId}`)
       return cached.data
     }
   }
 
-  // Tier 1: API-based (fast — ~200ms when hash is current)
-  const apiResult = await apiScrape(url)
-  if (apiResult.scrapeSuccess) {
-    if (listingId) scrapeCache.set(listingId, { data: apiResult, ts: Date.now() })
-    return apiResult
-  }
-  console.warn('[scraper] API scrape failed:', apiResult.scrapeError)
-
-  // Tier 2: Apify — reliable but slower, only when explicitly enabled
-  if (process.env.APIFY_ENABLED === 'true' && process.env.APIFY_API_TOKEN) {
-    const apifyResult = await apifyScrape(url)
-    if (apifyResult.scrapeSuccess) {
-      if (listingId) scrapeCache.set(listingId, { data: apifyResult, ts: Date.now() })
-      return apifyResult
+  // Retry up to 2 times with a delay if all tiers fail (handles transient
+  // blocks from datacenter IPs — each attempt uses a fresh User-Agent)
+  let lastResult: ScrapedListing | null = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) {
+      console.log(`[scraper] Retry attempt ${attempt + 1} after ${attempt * 2}s delay...`)
+      await sleep(attempt * 2000)
     }
-    console.warn('[scraper] Apify scrape failed:', apifyResult.scrapeError)
+
+    // Tier 1: API-based (fast — ~200ms when hash is current)
+    const apiResult = await apiScrape(url)
+    if (apiResult.scrapeSuccess) {
+      if (listingId) scrapeCache.set(listingId, { data: apiResult, ts: Date.now() })
+      return apiResult
+    }
+    console.warn(`[scraper] API scrape failed (attempt ${attempt + 1}):`, apiResult.scrapeError)
+
+    // Tier 2: Apify — reliable but slower, only when explicitly enabled
+    if (process.env.APIFY_ENABLED === 'true' && process.env.APIFY_API_TOKEN) {
+      const apifyResult = await apifyScrape(url)
+      if (apifyResult.scrapeSuccess) {
+        if (listingId) scrapeCache.set(listingId, { data: apifyResult, ts: Date.now() })
+        return apifyResult
+      }
+      console.warn(`[scraper] Apify scrape failed (attempt ${attempt + 1}):`, apifyResult.scrapeError)
+    }
+
+    // Tier 3: HTML fetch fallback
+    const fetchResult = await fetchScrape(url)
+    if (fetchResult.scrapeSuccess) {
+      if (listingId) scrapeCache.set(listingId, { data: fetchResult, ts: Date.now() })
+      return fetchResult
+    }
+    console.warn(`[scraper] Fetch scrape failed (attempt ${attempt + 1}):`, fetchResult.scrapeError)
+    lastResult = fetchResult
   }
 
-  // Tier 3: HTML fetch fallback
-  const fetchResult = await fetchScrape(url)
-  if (fetchResult.scrapeSuccess) {
-    if (listingId) scrapeCache.set(listingId, { data: fetchResult, ts: Date.now() })
-    return fetchResult
-  }
-  console.warn('[scraper] Fetch scrape failed:', fetchResult.scrapeError)
-
-  return fetchResult
+  return lastResult!
 }
