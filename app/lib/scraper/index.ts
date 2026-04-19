@@ -619,19 +619,24 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
 }
 
 /**
- * Main scraper entry point.
- * 1. Apify (most reliable at scale — DORMANT until APIFY_ENABLED=true is set)
- * 2. API-based (Airbnb public GraphQL — current primary in production)
- * 3. HTML fetch fallback (catches API endpoint failures)
+ * Main scraper entry point — 3-tier fallback ordered by speed:
+ *
+ * 1. API-based (Airbnb public GraphQL — fast, self-healing hash discovery)
+ * 2. Apify (managed scraper — reliable but slower, ~30-90s per listing)
+ * 3. HTML fetch fallback (catches cases where both above fail)
  *
  * To activate Apify: rent the tri_angle/airbnb-scraper actor on your Apify
- * account, then set APIFY_ENABLED=true in Railway env vars. The token
- * (APIFY_API_TOKEN) can stay set while dormant — this gate prevents wasted
- * API calls + latency that would happen on every scrape if the actor isn't
- * rented yet.
+ * account, then set APIFY_ENABLED=true and APIFY_API_TOKEN in Railway env vars.
  */
 export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> {
-  // Tier 1: Apify — only active when explicitly enabled
+  // Tier 1: API-based (fast — ~200ms when hash is current)
+  const apiResult = await apiScrape(url)
+  if (apiResult.scrapeSuccess) {
+    return apiResult
+  }
+  console.warn('[scraper] API scrape failed:', apiResult.scrapeError)
+
+  // Tier 2: Apify — reliable but slower, only when explicitly enabled
   if (process.env.APIFY_ENABLED === 'true' && process.env.APIFY_API_TOKEN) {
     const apifyResult = await apifyScrape(url)
     if (apifyResult.scrapeSuccess) {
@@ -640,12 +645,7 @@ export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> 
     console.warn('[scraper] Apify scrape failed:', apifyResult.scrapeError)
   }
 
-  const apiResult = await apiScrape(url)
-  if (apiResult.scrapeSuccess) {
-    return apiResult
-  }
-  console.warn('[scraper] API scrape failed:', apiResult.scrapeError)
-
+  // Tier 3: HTML fetch fallback
   const fetchResult = await fetchScrape(url)
   if (fetchResult.scrapeSuccess) {
     return fetchResult
