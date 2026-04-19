@@ -74,7 +74,42 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
   if (!API_KEY) {
     return { ...base, scrapeError: 'AIRBNB_API_KEY is not configured' }
   }
-  const apiUrl = `https://www.airbnb.com/api/v3/StaysPdpSections/d1d64f8a2ace16cd48e7a88e7e1f12cca413fa53ff4a3c8b5d20e7ec733361d0?operationName=StaysPdpSections&locale=en&currency=USD&variables=%7B%22id%22%3A%22StaysListing%3A${listingId}%22%2C%22pdpSectionsRequest%22%3A%7B%22adults%22%3A%221%22%2C%22layouts%22%3A%5B%22SIDEBAR%22%2C%22SINGLE_COLUMN%22%5D%7D%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22d1d64f8a2ace16cd48e7a88e7e1f12cca413fa53ff4a3c8b5d20e7ec733361d0%22%7D%7D`
+
+  const HASH = 'f81911bce044e58b7c2ed3f44b3ca576af3c08988ce2c0b3ee0d6d444cfd25a1'
+  const id = Buffer.from(`StayListing:${listingId}`).toString('base64')
+  const demandId = Buffer.from(`DemandStayListing:${listingId}`).toString('base64')
+  const variables = {
+    amenityIds: null, categoryTag: null, dateRange: null,
+    demandStayListingId: demandId, federatedSearchId: null, guestCounts: null,
+    id,
+    includeGpAmenitiesFragment: true, includeGpBookItFragment: true,
+    includeGpBookItNonExperiencedGuestFragment: true, includeGpDescriptionFragment: true,
+    includeGpHeroFragment: true, includeGpHighlightsFragment: true,
+    includeGpLocationPdpFragment: true, includeGpMarqueeBookItFloatingFooterFragment: true,
+    includeGpMarqueeBookItNavFragment: true, includeGpMarqueeBookItSidebarFragment: true,
+    includeGpMeetYourHostFragment: true, includeGpNavFragment: true,
+    includeGpNavMobileFragment: true, includeGpNonExperiencedGuestLearnMoreModalFragment: true,
+    includeGpOverviewV2Fragment: true, includeGpPoliciesFragment: true,
+    includeGpReportToAirbnbFragment: true, includeGpReviewsEmptyFragment: true,
+    includeGpReviewsFragment: true, includeGpReviewsHighlightBannerFragment: true,
+    includeGpTitleFragment: true,
+    includePdpMigrationAmenitiesFragment: false, includePdpMigrationBookItFloatingFooterFragment: false,
+    includePdpMigrationBookItNavFragment: false, includePdpMigrationBookItNonExperiencedGuestFragment: false,
+    includePdpMigrationDescriptionFragment: false, includePdpMigrationHeroFragment: false,
+    includePdpMigrationHighlightsFragment: true, includePdpMigrationLocationPdpFragment: false,
+    includePdpMigrationMarqueeBookItFloatingFooterFragment: false, includePdpMigrationMarqueeBookItNavFragment: false,
+    includePdpMigrationMarqueeBookItSidebarFragment: false, includePdpMigrationMeetYourHostFragment: false,
+    includePdpMigrationNavFragment: false, includePdpMigrationNavMobileFragment: false,
+    includePdpMigrationOverviewV2Fragment: false, includePdpMigrationPoliciesFragment: false,
+    includePdpMigrationReportToAirbnbFragment: false, includePdpMigrationReviewsEmptyFragment: false,
+    includePdpMigrationReviewsFragment: false, includePdpMigrationReviewsHighlightBannerFragment: false,
+    includePdpMigrationTitleFragment: false,
+    numberOfAdults: null, numberOfChildren: null, numberOfInfants: null, numberOfPets: null,
+    p3ImpressionId: null, photoId: null,
+    pdpSectionsRequest: { adults: '1', layouts: ['SIDEBAR', 'SINGLE_COLUMN'] },
+  }
+  const extensions = { persistedQuery: { version: 1, sha256Hash: HASH } }
+  const apiUrl = `https://www.airbnb.com/api/v3/StaysPdpSections/${HASH}?operationName=StaysPdpSections&locale=en&currency=USD&variables=${encodeURIComponent(JSON.stringify(variables))}&extensions=${encodeURIComponent(JSON.stringify(extensions))}`
 
   try {
     const res = await fetch(apiUrl, {
@@ -121,11 +156,17 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
       }
     }
 
-    // Extract location
+    // Extract location — try structured fields first, fall back to subtitle text
     let location = ''
     const locMatch = dataStr.match(/"city":\s*"([^"]+)"/)
     const regionMatch = dataStr.match(/"state":\s*"([^"]+)"/)
-    if (locMatch) location = [locMatch[1], regionMatch?.[1]].filter(Boolean).join(', ')
+    if (locMatch) {
+      location = [locMatch[1], regionMatch?.[1]].filter(Boolean).join(', ')
+    } else {
+      const subtitleMatch = dataStr.match(/"localizedCityName":\s*"([^"]+)"/)
+        ?? dataStr.match(/"locationTitle":\s*"([^"]+)"/)
+      if (subtitleMatch) location = subtitleMatch[1]
+    }
 
     // Extract rating
     let rating = 0
