@@ -618,6 +618,11 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
   }
 }
 
+// In-memory scrape cache — avoids re-scraping the same listing within 1 hour
+// (e.g. Quick Score → Full Audit upgrade). Keyed by listing ID.
+const scrapeCache = new Map<string, { data: ScrapedListing; ts: number }>()
+const SCRAPE_CACHE_TTL = 60 * 60_000 // 1 hour
+
 /**
  * Main scraper entry point — 3-tier fallback ordered by speed:
  *
@@ -629,9 +634,19 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
  * account, then set APIFY_ENABLED=true and APIFY_API_TOKEN in Railway env vars.
  */
 export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> {
+  // Check scrape cache first (avoids re-scraping on upgrade flow)
+  const listingId = extractListingId(url)
+  if (listingId) {
+    const cached = scrapeCache.get(listingId)
+    if (cached && Date.now() - cached.ts < SCRAPE_CACHE_TTL) {
+      return cached.data
+    }
+  }
+
   // Tier 1: API-based (fast — ~200ms when hash is current)
   const apiResult = await apiScrape(url)
   if (apiResult.scrapeSuccess) {
+    if (listingId) scrapeCache.set(listingId, { data: apiResult, ts: Date.now() })
     return apiResult
   }
   console.warn('[scraper] API scrape failed:', apiResult.scrapeError)
@@ -640,6 +655,7 @@ export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> 
   if (process.env.APIFY_ENABLED === 'true' && process.env.APIFY_API_TOKEN) {
     const apifyResult = await apifyScrape(url)
     if (apifyResult.scrapeSuccess) {
+      if (listingId) scrapeCache.set(listingId, { data: apifyResult, ts: Date.now() })
       return apifyResult
     }
     console.warn('[scraper] Apify scrape failed:', apifyResult.scrapeError)
@@ -648,6 +664,7 @@ export async function scrapeAirbnbListing(url: string): Promise<ScrapedListing> 
   // Tier 3: HTML fetch fallback
   const fetchResult = await fetchScrape(url)
   if (fetchResult.scrapeSuccess) {
+    if (listingId) scrapeCache.set(listingId, { data: fetchResult, ts: Date.now() })
     return fetchResult
   }
   console.warn('[scraper] Fetch scrape failed:', fetchResult.scrapeError)
