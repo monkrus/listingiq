@@ -570,19 +570,15 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
 
   try {
     // Start the actor run via REST API
+    // Uses tri_angle/airbnb-rooms-urls-scraper (accepts individual listing URLs)
     console.log('[scraper:apify] Starting actor run...')
     const runRes = await fetch(
-      `https://api.apify.com/v2/acts/tri_angle~airbnb-scraper/runs?token=${token}&timeout=120&memory=256`,
+      `https://api.apify.com/v2/acts/tri_angle~airbnb-rooms-urls-scraper/runs?token=${token}&timeout=120&memory=256`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           startUrls: [{ url }],
-          maxListings: 1,
-          includeReviews: true,
-          maxReviews: 12,
-          simple: false,
-          currency: 'USD',
           proxyConfiguration: { useApifyProxy: true },
         }),
       }
