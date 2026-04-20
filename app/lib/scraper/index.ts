@@ -620,36 +620,60 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
     }
 
     const item = items[0]
+    // Log the keys so we can map the schema if it differs
+    console.log(`[scraper:apify] Item keys: ${Object.keys(item).join(', ')}`)
 
-    const title = (item.name as string) || ''
-    const description = (item.description as string) || ''
-    const location = [item.city, item.state, item.country].filter(Boolean).join(', ')
+    // The rooms-urls-scraper may use different field names than the search scraper.
+    // Try multiple possible field names for each data point.
+    const title = (item.name as string) || (item.title as string) || (item.listingTitle as string) || ''
+    const description = (item.description as string) || (item.aboutSpace as string) || ''
+    const location = (item.address as string)
+      || [item.city, item.state, item.country].filter(Boolean).join(', ')
+      || ''
     const rating = typeof item.stars === 'number' ? item.stars
-      : typeof item.rating === 'number' ? item.rating : 0
-    const reviewCount = typeof item.reviewsCount === 'number' ? (item.reviewsCount as number) : 0
-    const photoCount = Array.isArray(item.photos) ? (item.photos as unknown[]).length : 0
+      : typeof item.rating === 'number' ? item.rating
+      : typeof item.guestSatisfactionOverall === 'number' ? item.guestSatisfactionOverall : 0
+    const reviewCount = typeof item.reviewsCount === 'number' ? (item.reviewsCount as number)
+      : typeof item.numberOfReviews === 'number' ? (item.numberOfReviews as number) : 0
+
+    // Photos: try multiple field names
+    const photosRaw = (item.photos ?? item.images ?? item.pictureUrls ?? []) as unknown[]
+    const photoCount = photosRaw.length
     let photoUrls: string[] = []
-    if (Array.isArray(item.photos)) {
-      photoUrls = (item.photos as Record<string, unknown>[])
-        .map(p => (p.pictureUrl as string) || (p.url as string) || (p.baseUrl as string) || '')
+    if (photosRaw.length) {
+      photoUrls = photosRaw
+        .map(p => {
+          if (typeof p === 'string') return p
+          if (typeof p === 'object' && p) {
+            const obj = p as Record<string, unknown>
+            return (obj.pictureUrl as string) || (obj.url as string) || (obj.baseUrl as string) || ''
+          }
+          return ''
+        })
         .filter(Boolean)
         .slice(0, 10)
     }
 
     // Extract amenities
     let amenities: string[] = []
-    if (Array.isArray(item.amenities)) {
-      amenities = (item.amenities as string[]).filter(a => typeof a === 'string' && isLikelyAmenity(a)).slice(0, 50)
+    const amenitiesRaw = (item.amenities ?? item.previewAmenities ?? []) as unknown[]
+    if (amenitiesRaw.length) {
+      amenities = amenitiesRaw
+        .map(a => typeof a === 'string' ? a : typeof a === 'object' && a ? ((a as Record<string, unknown>).title as string || '') : '')
+        .filter(a => a && isLikelyAmenity(a))
+        .slice(0, 50)
     }
 
     // Extract reviews
     let reviews: string[] = []
     if (Array.isArray(item.reviews)) {
       reviews = (item.reviews as Record<string, unknown>[])
-        .map(r => (r.comments as string) || (r.text as string) || '')
+        .map(r => (r.comments as string) || (r.text as string) || (r.comment as string) || '')
         .filter(r => r.length > 15)
         .slice(0, 12)
     }
+
+    console.log(`[scraper:apify] Extracted: title="${title.substring(0, 50)}", photos=${photoCount}, rating=${rating}`)
 
     if (!title && !description) {
       return { ...base, scrapeError: 'Apify returned empty listing data' }
