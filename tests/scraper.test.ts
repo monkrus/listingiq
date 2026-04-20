@@ -8,13 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const fetchMock = vi.fn()
 vi.stubGlobal('fetch', fetchMock)
 
-// Mock Apify client (tier 1 is dormant by default)
-vi.mock('apify-client', () => ({
-  ApifyClient: class {
-    actor() { return { call: vi.fn() } }
-    dataset() { return { listItems: vi.fn().mockResolvedValue({ items: [] }) } }
-  },
-}))
+// Apify is called via fetch (no SDK) — already covered by fetchMock
 
 import { scrapeAirbnbListing, isValidAirbnbUrl } from '@/app/lib/scraper'
 

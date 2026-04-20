@@ -6,7 +6,6 @@
  * 3. fetchScrape — HTML parse fallback (different failure mode than tier 2)
  */
 
-import { ApifyClient } from 'apify-client'
 import { ListingInput } from '../types'
 export { isValidAirbnbUrl } from '../validation'
 
@@ -553,8 +552,8 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
 
 
 /**
- * Apify-based scraper — uses a managed Airbnb scraper actor.
- * Most reliable at scale, handles anti-bot measures.
+ * Apify-based scraper — calls the Apify REST API directly (no SDK needed).
+ * Uses the tri_angle/airbnb-scraper actor with residential proxies.
  */
 async function apifyScrape(url: string): Promise<ScrapedListing> {
   const base: ScrapedListing = {
@@ -570,29 +569,61 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
   }
 
   try {
-    const client = new ApifyClient({ token })
+    // Start the actor run via REST API
+    console.log('[scraper:apify] Starting actor run...')
+    const runRes = await fetch(
+      `https://api.apify.com/v2/acts/tri_angle~airbnb-scraper/runs?token=${token}&timeout=120&memory=256`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startUrls: [{ url }],
+          maxListings: 1,
+          includeReviews: true,
+          maxReviews: 12,
+          simple: false,
+          currency: 'USD',
+          proxyConfiguration: { useApifyProxy: true },
+        }),
+      }
+    )
+    if (!runRes.ok) {
+      const errText = await runRes.text().catch(() => '')
+      return { ...base, scrapeError: `Apify API ${runRes.status}: ${errText.substring(0, 200)}` }
+    }
+    const run = await runRes.json() as { data?: { id?: string; defaultDatasetId?: string; status?: string } }
+    const datasetId = run.data?.defaultDatasetId
+    const runId = run.data?.id
+    if (!datasetId || !runId) {
+      return { ...base, scrapeError: 'Apify run did not return dataset ID' }
+    }
 
-    // Use the tri_angle Airbnb scraper actor (most maintained community actor)
-    const run = await client.actor('tri_angle/airbnb-scraper').call({
-      startUrls: [{ url }],
-      maxListings: 1,
-      includeReviews: true,
-      maxReviews: 12,
-      simple: false,
-      currency: 'USD',
-      proxyConfiguration: { useApifyProxy: true },
-    }, {
-      timeout: 120, // seconds — single listing typically takes 30-90s
-      memory: 256,
-    })
+    // Poll for run completion (max ~120s)
+    for (let i = 0; i < 40; i++) {
+      await sleep(3000)
+      const statusRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${token}`)
+      if (!statusRes.ok) continue
+      const statusData = await statusRes.json() as { data?: { status?: string } }
+      const status = statusData.data?.status
+      console.log(`[scraper:apify] Run status: ${status}`)
+      if (status === 'SUCCEEDED') break
+      if (status === 'FAILED' || status === 'ABORTED' || status === 'TIMED-OUT') {
+        return { ...base, scrapeError: `Apify run ${status}` }
+      }
+    }
 
-    const { items } = await client.dataset(run.defaultDatasetId).listItems({ limit: 1 })
+    // Fetch results from dataset
+    const itemsRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=1`)
+    if (!itemsRes.ok) {
+      return { ...base, scrapeError: `Apify dataset fetch failed: ${itemsRes.status}` }
+    }
+    const items = await itemsRes.json() as Record<string, unknown>[]
 
-    if (!items.length) {
+    if (!items?.length) {
       return { ...base, scrapeError: 'Apify returned no results' }
     }
 
-    const item = items[0] as Record<string, unknown>
+    const item = items[0]
 
     const title = (item.name as string) || ''
     const description = (item.description as string) || ''
