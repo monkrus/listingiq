@@ -18,6 +18,17 @@ vi.mock('apify-client', () => ({
 
 import { scrapeAirbnbListing, isValidAirbnbUrl } from '@/app/lib/scraper'
 
+/** Helper: create a mock fetch Response with headers */
+function mockResponse(opts: { ok: boolean; status?: number; json?: unknown; text?: string }) {
+  return {
+    ok: opts.ok,
+    status: opts.status ?? (opts.ok ? 200 : 500),
+    headers: { get: () => null },
+    json: () => Promise.resolve(opts.json ?? {}),
+    text: () => Promise.resolve(opts.text ?? ''),
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('APIFY_ENABLED', 'false')
@@ -69,14 +80,13 @@ describe('scrapeAirbnbListing', () => {
         },
       },
     }
-    // The API response is JSON-stringified and regex-matched
     const jsonStr = JSON.stringify(mockApiResponse)
 
-    fetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce(mockResponse({
       ok: true,
-      json: () => Promise.resolve(JSON.parse(jsonStr)),
-      text: () => Promise.resolve(jsonStr),
-    })
+      json: JSON.parse(jsonStr),
+      text: jsonStr,
+    }))
 
     const result = await scrapeAirbnbListing('https://www.airbnb.com/rooms/12345')
     expect(result.scrapeSuccess).toBe(true)
@@ -84,13 +94,10 @@ describe('scrapeAirbnbListing', () => {
   })
 
   it('falls back to HTML tier when API returns 403', async () => {
-    // Tier 2 (API) fails
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 403,
-    })
+    // API fails with 403
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: false, status: 403, text: 'Forbidden' }))
 
-    // Tier 3 (HTML) succeeds
+    // HTML fetch succeeds
     const htmlContent = `
       <html>
       <head>
@@ -100,10 +107,7 @@ describe('scrapeAirbnbListing', () => {
       <body></body>
       </html>
     `
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      text: () => Promise.resolve(htmlContent),
-    })
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: true, text: htmlContent }))
 
     const result = await scrapeAirbnbListing('https://www.airbnb.com/rooms/99999')
     expect(result.scrapeSuccess).toBe(true)
@@ -113,9 +117,11 @@ describe('scrapeAirbnbListing', () => {
 
   it('returns failure when all tiers fail', async () => {
     // API returns 500
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 500 })
-    // HTML returns 500
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 500 })
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: false, status: 500, text: 'Server Error' }))
+    // HTML fetch returns 500
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: false, status: 500 }))
+    // Last resort retry also fails
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: false, status: 500 }))
 
     const result = await scrapeAirbnbListing('https://www.airbnb.com/rooms/11111')
     expect(result.scrapeSuccess).toBe(false)
@@ -123,10 +129,12 @@ describe('scrapeAirbnbListing', () => {
   })
 
   it('handles network error gracefully', async () => {
-    // API tier throws (try/catch in apiScrape catches it)
+    // API tier throws
     fetchMock.mockRejectedValueOnce(new Error('Network timeout'))
-    // HTML tier: return empty page so fetchScrape doesn't also throw
-    fetchMock.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('<html></html>') })
+    // HTML tier returns empty page
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: true, text: '<html></html>' }))
+    // Last resort retry also returns empty
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: true, text: '<html></html>' }))
 
     const result = await scrapeAirbnbListing('https://www.airbnb.com/rooms/22222')
     expect(result.scrapeSuccess).toBe(false)
@@ -134,9 +142,11 @@ describe('scrapeAirbnbListing', () => {
 
   it('returns failure when page has no extractable data', async () => {
     // API tier fails
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 404 })
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: false, status: 404, text: 'Not found' }))
     // HTML tier returns page with no title or description
-    fetchMock.mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('<html><head></head><body></body></html>') })
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: true, text: '<html><head></head><body></body></html>' }))
+    // Last resort retry also empty
+    fetchMock.mockResolvedValueOnce(mockResponse({ ok: true, text: '<html><head></head><body></body></html>' }))
 
     const result = await scrapeAirbnbListing('https://www.airbnb.com/rooms/00000')
     expect(result.scrapeSuccess).toBe(false)
@@ -153,11 +163,11 @@ describe('scrapeAirbnbListing', () => {
     }
     const jsonStr = JSON.stringify(apiData)
 
-    fetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce(mockResponse({
       ok: true,
-      json: () => Promise.resolve(JSON.parse(jsonStr)),
-      text: () => Promise.resolve(jsonStr),
-    })
+      json: JSON.parse(jsonStr),
+      text: jsonStr,
+    }))
 
     const result = await scrapeAirbnbListing('https://www.airbnb.com/rooms/33333')
     expect(result.scrapeSuccess).toBe(true)
@@ -174,10 +184,11 @@ describe('scrapeAirbnbListing', () => {
     }
     const jsonStr = JSON.stringify(apiData)
 
-    fetchMock.mockResolvedValueOnce({
+    fetchMock.mockResolvedValueOnce(mockResponse({
       ok: true,
-      json: () => Promise.resolve(JSON.parse(jsonStr)),
-    })
+      json: JSON.parse(jsonStr),
+      text: jsonStr,
+    }))
 
     const result = await scrapeAirbnbListing('https://www.airbnb.com/rooms/44444')
     expect(result.scrapeSuccess).toBe(true)

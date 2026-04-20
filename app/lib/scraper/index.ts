@@ -322,12 +322,13 @@ async function apiScrape(url: string): Promise<ScrapedListing> {
     const apiUrl = buildApiUrl(currentHash, listingId, currentVars)
     console.log(`[scraper:api] Fetching listing ${listingId} with hash ${currentHash.substring(0, 12)}...`)
     const res = await fetch(apiUrl, { headers })
-    console.log(`[scraper:api] Response: ${res.status}, content-length: ${res.headers.get('content-length')}`)
+    console.log(`[scraper:api] Response: ${res.status}, content-length: ${res.headers?.get?.('content-length') ?? 'unknown'}`)
 
     // Check for stale hash — Airbnb returns 400 with PersistedQueryNotFound
     // or 200 with a GraphQL validation error when the hash rotates
+    const contentLength = res.headers?.get?.('content-length')
     const isStaleHash = res.status === 400 ||
-      (res.status === 200 && res.headers.get('content-length') && parseInt(res.headers.get('content-length')!) < 300)
+      (res.status === 200 && contentLength && parseInt(contentLength) < 300)
 
     if (isStaleHash) {
       // Read body to check for PersistedQueryNotFound / ValidationError
@@ -394,15 +395,20 @@ async function fetchScrape(url: string): Promise<ScrapedListing> {
     scrapeSuccess: false,
   }
 
-  const ua = randomUA()
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': ua,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.9',
-    },
-    redirect: 'follow',
-  })
+  let res: Response
+  try {
+    res = await fetch(url, {
+      headers: {
+        'User-Agent': randomUA(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      redirect: 'follow',
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { ...base, scrapeError: msg }
+  }
 
   if (!res.ok) {
     return { ...base, scrapeError: `HTTP ${res.status}` }
