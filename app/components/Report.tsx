@@ -362,9 +362,9 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
                 <span className="text-xs text-stone-400 ml-1 line-through">$49</span>
               </div>
               <ul className="text-xs text-stone-600 space-y-1 mb-3 text-left inline-block">
-                <li className="flex gap-1.5"><span className="text-green-600">✓</span>AI photo analysis (up to 10 photos)</li>
-                <li className="flex gap-1.5"><span className="text-green-600">✓</span>Photo reorder + retake instructions</li>
-                <li className="flex gap-1.5"><span className="text-green-600">✓</span>Gallery order suggestion</li>
+                <li className="flex gap-1.5"><span className="text-green-600">✓</span>AI photo analysis — upload or we use your listing photos</li>
+                <li className="flex gap-1.5"><span className="text-green-600">✓</span>Keep / retake verdict for each photo</li>
+                <li className="flex gap-1.5"><span className="text-green-600">✓</span>Best photo order + hero shot pick</li>
               </ul>
               {isDemo ? (
                 <button

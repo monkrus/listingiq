@@ -641,12 +641,24 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
     const photoCount = photosRaw.length
     let photoUrls: string[] = []
     if (photosRaw.length) {
+      // Log first image object structure so we can diagnose field-name mismatches
+      if (typeof photosRaw[0] === 'object' && photosRaw[0]) {
+        console.log(`[scraper:apify] Image object keys: ${Object.keys(photosRaw[0] as Record<string, unknown>).join(', ')}`)
+      }
       photoUrls = photosRaw
         .map(p => {
           if (typeof p === 'string') return p
           if (typeof p === 'object' && p) {
             const obj = p as Record<string, unknown>
-            return (obj.pictureUrl as string) || (obj.url as string) || (obj.baseUrl as string) || ''
+            // Try known field names first
+            const known = (obj.pictureUrl as string) || (obj.url as string) || (obj.baseUrl as string)
+              || (obj.thumbnailUrl as string) || (obj.src as string) || (obj.picture as string)
+              || (obj.imageUrl as string) || (obj.originalUrl as string) || (obj.large as string)
+            if (known) return known
+            // Fallback: find the first string value that looks like a URL
+            for (const val of Object.values(obj)) {
+              if (typeof val === 'string' && val.startsWith('http') && /\.(jpg|jpeg|png|webp)/i.test(val)) return val
+            }
           }
           return ''
         })
@@ -673,7 +685,7 @@ async function apifyScrape(url: string): Promise<ScrapedListing> {
         .slice(0, 12)
     }
 
-    console.log(`[scraper:apify] Extracted: title="${title.substring(0, 50)}", photos=${photoCount}, rating=${rating}`)
+    console.log(`[scraper:apify] Extracted: title="${title.substring(0, 50)}", photos=${photoCount} (${photoUrls.length} URLs extracted), rating=${rating}`)
 
     if (!title && !description) {
       return { ...base, scrapeError: 'Apify returned empty listing data' }

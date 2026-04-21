@@ -286,9 +286,9 @@ test('pricing page shows "Most popular" badge on Full Audit', async ({ page }) =
 
 test('pricing page shows plan features', async ({ page }) => {
   await page.goto('/pricing')
-  await expect(page.getByText('Full 7-section listing audit')).toBeVisible()
-  await expect(page.getByText('AI photo analysis (up to 10 photos)')).toBeVisible()
-  await expect(page.getByText('PDF report download')).toBeVisible()
+  await expect(page.getByText('Title, description & amenity analysis')).toBeVisible()
+  await expect(page.getByText(/AI photo analysis.*upload yours/)).toBeVisible()
+  await expect(page.getByText('PDF report + email delivery')).toBeVisible()
 })
 
 test('pricing page shows Stripe checkout info', async ({ page }) => {

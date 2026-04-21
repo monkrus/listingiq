@@ -69,6 +69,11 @@ export default function PhotoUploadStep({ onContinue, onSkip, uploading }: Props
         <p className="text-xs text-stone-600">
           We&apos;ll analyze them together with your listing text for a complete report.
         </p>
+        <div className="mt-2 bg-stone-50 border border-stone-200 rounded-xl px-3 py-2">
+          <p className="text-xs text-stone-500">
+            Have your photos ready — <strong>JPG, PNG, or WebP</strong>, up to <strong>10 photos</strong>, max <strong>4 MB each</strong>.
+          </p>
+        </div>
       </div>
 
       {files.length === 0 ? (

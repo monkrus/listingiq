@@ -581,14 +581,14 @@ export default function Home() {
                     key: 'quick-score',
                     name: 'Quick Score',
                     price: '$29',
-                    features: ['Full 7-section audit', 'Title + description rewrites', 'SEO keywords & tips', 'Priority action plan', 'PDF report download', 'Report sent via email'],
+                    features: ['Title, description & amenity analysis', 'AI-written title + description rewrites', 'SEO keywords & guest persona match', 'Priority action plan with scores', 'PDF report + email delivery'],
                   },
                   {
                     key: 'full-audit',
                     name: 'Full Audit',
                     price: '$49',
                     popular: true,
-                    features: ['Everything in Quick Score', 'AI photo analysis (up to 10 photos)', 'Photo reorder + retake tips', 'Gallery order suggestion'],
+                    features: ['Everything in Quick Score', 'AI photo analysis — upload yours or we analyze your listing photos', 'Keep / retake verdict for each photo', 'Best photo order + hero shot pick'],
                   },
                 ].map(p => (
                   <button
@@ -616,6 +616,13 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+              {selectedPlan === 'full-audit' && (
+                <div className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 mb-3">
+                  <p className="text-xs text-stone-500">
+                    Have your photos ready — <strong>JPG, PNG, or WebP</strong>, up to <strong>10 photos</strong>, max <strong>4 MB each</strong>.
+                  </p>
+                </div>
+              )}
               <button
                 onClick={() => handlePlanSelect(selectedPlan)}
                 style={{ fontFamily: 'var(--font-syne)' }}
