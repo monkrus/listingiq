@@ -272,6 +272,9 @@ export async function POST(req: NextRequest) {
     const labeledContents: (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[] = []
     const filenames: string[] = []
 
+    // Collect base64 data URIs for PDF previews (CDN URLs fail due to CORS)
+    const listingPhotoPreviews: string[] = []
+
     if (photoUrls.length) {
       // From scraped listing URLs — download and convert to base64.
       // IMPORTANT: Use magic-byte detection, NOT the Content-Type header.
@@ -296,6 +299,7 @@ export async function POST(req: NextRequest) {
           labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${name}]` })
           labeledContents.push({ type: 'image', source: { type: 'base64', media_type: resized.mediaType, data: base64 } })
           filenames.push(name)
+          listingPhotoPreviews.push(`data:${resized.mediaType};base64,${base64}`)
         } catch (err) {
           console.warn(`[photo-analyze] Failed to download photo ${i + 1}:`, err)
         }
@@ -452,8 +456,8 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
 
     // Include previews so client can display photo thumbnails
     let responseData: Record<string, unknown> = { ...result }
-    if (photoUrls.length) {
-      responseData = { ...result, previews: photoUrls.slice(0, filenames.length) }
+    if (listingPhotoPreviews.length) {
+      responseData = { ...result, previews: listingPhotoPreviews }
     } else if (storedPhotos) {
       const previews = storedPhotos.map(p => `data:${p.mediaType};base64,${p.base64}`)
       responseData = { ...result, previews }

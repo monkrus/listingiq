@@ -83,14 +83,14 @@ const s = StyleSheet.create({
   subScoreValue: { fontFamily: 'Syne', fontSize: 14, fontWeight: 700, textAlign: 'center' },
   subScoreBar: { height: 3, backgroundColor: '#f5f5f4', borderRadius: 2, width: '100%', marginTop: 4 },
   subScoreBarFill: { height: 3, borderRadius: 2 },
-  priorityBox: { backgroundColor: C.amberBg, border: `1pt solid ${C.amberBorder}`, borderRadius: 10, padding: 14, marginBottom: 10, minPresenceAhead: 40 },
+  priorityBox: { backgroundColor: C.amberBg, border: `1pt solid ${C.amberBorder}`, borderRadius: 10, padding: 14, marginBottom: 10 },
   priorityTitle: { fontFamily: 'Syne', fontSize: 8, fontWeight: 700, color: C.amberText, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
   priorityRow: { flexDirection: 'row', gap: 8, paddingVertical: 5, borderBottom: `1pt solid ${C.amberBorder}` },
   priorityRowLast: { flexDirection: 'row', gap: 8, paddingVertical: 5 },
   priorityNum: { fontFamily: 'Syne', fontSize: 9, fontWeight: 700, color: C.amberAccent, width: 20, flexShrink: 0 },
   priorityText: { fontSize: 9, color: C.amberText, flex: 1, lineHeight: 1.4 },
-  sectionCard: { backgroundColor: C.white, border: `1pt solid ${C.border}`, borderRadius: 10, marginBottom: 8, overflow: 'hidden', minPresenceAhead: 60 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottom: '1pt solid #f5f5f4', minPresenceAhead: 80 },
+  sectionCard: { backgroundColor: C.white, border: `1pt solid ${C.border}`, borderRadius: 10, marginBottom: 8, overflow: 'hidden', minPresenceAhead: 30 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottom: '1pt solid #f5f5f4', minPresenceAhead: 30 },
   sectionTitle: { fontFamily: 'Syne', fontSize: 10, fontWeight: 700, color: C.brand },
   scorePill: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
   scorePillText: { fontSize: 7, fontWeight: 500 },
@@ -110,7 +110,7 @@ const s = StyleSheet.create({
   rowItemText: { fontSize: 8, color: C.brand, flex: 1, lineHeight: 1.4 },
   subLabel: { fontSize: 7, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 5, marginTop: 8 },
   boldText: { fontWeight: 700 },
-  competitorBox: { backgroundColor: C.blueBg, border: '1pt solid #bfdbfe', borderRadius: 10, padding: 14, marginBottom: 8, minPresenceAhead: 40 },
+  competitorBox: { backgroundColor: C.blueBg, border: '1pt solid #bfdbfe', borderRadius: 10, padding: 14, marginBottom: 8 },
   competitorTitle: { fontFamily: 'Syne', fontSize: 8, fontWeight: 700, color: C.blueText, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
   competitorText: { fontSize: 9, color: C.blueText, lineHeight: 1.5 },
   footer: { position: 'absolute', bottom: 12, left: 40, right: 40 },
@@ -393,7 +393,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
 
           {/* Competitor insight */}
           {d.competitorInsight && (
-            <View style={s.competitorBox} wrap={false}>
+            <View style={s.competitorBox}>
               <Text style={s.competitorTitle}>Best practices from top-performing listings</Text>
               <Text style={s.competitorText}>{d.competitorInsight}</Text>
             </View>
@@ -412,7 +412,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
           </SectionCard>
 
           {/* SEO */}
-          <View style={s.sectionCard} wrap={false}>
+          <View style={s.sectionCard}>
             <View style={s.sectionHeader}>
               <Text style={s.sectionTitle}>Keywords & optimization tips</Text>
             </View>
