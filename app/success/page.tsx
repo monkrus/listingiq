@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Logo from '../components/Logo'
 
 function SuccessContent() {
   const searchParams = useSearchParams()
@@ -66,8 +67,8 @@ export default function SuccessPage() {
   return (
     <main className="min-h-screen flex items-center justify-center px-4" style={{ background: '#F7F6F3' }}>
       <div className="max-w-2xl mx-auto px-4 text-center">
-        <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-6">
-          ListingIQ · Airbnb Optimizer
+        <div className="flex justify-center mb-6">
+          <Logo size={40} />
         </div>
         <Suspense fallback={
           <div className="text-center">

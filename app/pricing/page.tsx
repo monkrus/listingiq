@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import Logo from '../components/Logo'
 
 const PLANS = [
   {
@@ -54,8 +55,8 @@ export default function PricingPage() {
       <div className="max-w-2xl mx-auto">
 
         <div className="text-center mb-10">
-          <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-4">
-            ListingIQ · Pricing
+          <div className="flex justify-center mb-4">
+            <Logo size={40} />
           </div>
           <h1 style={{ fontFamily: 'var(--font-syne)' }} className="text-4xl font-bold text-stone-900 mb-3">
             Simple, honest pricing

@@ -1,13 +1,13 @@
 import PhotoUploader from '@/app/components/PhotoUploader'
 import Link from 'next/link'
+import Logo from '../components/Logo'
 
 export default function PhotosPage() {
   return (
     <main className="min-h-screen py-12" style={{ background: '#F7F6F3' }}>
       <div className="max-w-2xl mx-auto px-4 text-center mb-8">
-        <div style={{ fontFamily: 'var(--font-syne)' }}
-          className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-2">
-          ListingIQ · Photo Analyzer
+        <div className="flex justify-center mb-2">
+          <Logo size={40} />
         </div>
         <h1 style={{ fontFamily: 'var(--font-syne)' }}
           className="text-3xl font-bold text-stone-900 mb-2">

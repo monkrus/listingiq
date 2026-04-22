@@ -8,6 +8,7 @@ import { APP_VERSION } from './lib/version'
 import PhotoUploadStep from './components/PhotoUploadStep'
 import { PhotoAnalysisResult } from './api/analyze-photos/route'
 import { savePendingPhotos, getPendingPhotos, clearPendingPhotos } from './lib/photo-db'
+import Logo from './components/Logo'
 
 const LOADING_STEPS = [
   'Connecting to Airbnb...',
@@ -484,8 +485,8 @@ export default function Home() {
   if (hydrating && !report) return (
     <main className="min-h-screen py-12" style={{ background: '#F7F6F3' }}>
       <div className="max-w-2xl mx-auto px-4 text-center">
-        <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-2">
-          ListingIQ · Airbnb Optimizer
+        <div className="flex justify-center mb-2">
+          <Logo size={40} />
         </div>
         <p className="text-sm text-stone-400 mt-6">Loading your report...</p>
         <div className="w-8 h-8 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin mx-auto mt-4" />
@@ -497,8 +498,8 @@ export default function Home() {
   if (report && step === 'report') return (
     <main className="min-h-screen py-12" style={{ background: '#F7F6F3' }}>
       <div className="max-w-2xl mx-auto px-4 mb-6 text-center">
-        <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-2">
-          ListingIQ · Airbnb Optimizer
+        <div className="flex justify-center mb-2">
+          <Logo size={40} />
         </div>
         <a href="/?new=1" onClick={(e) => { e.preventDefault(); reset() }} className="text-sm text-stone-500 hover:text-stone-700 underline">
           Analyze another listing
@@ -524,8 +525,8 @@ export default function Home() {
       <div className="w-full max-w-xl">
 
         <div className="text-center mb-10">
-          <div style={{ fontFamily: 'var(--font-syne)' }} className="text-xs font-bold tracking-widest text-stone-600 uppercase mb-5">
-            ListingIQ · Airbnb Optimizer
+          <div className="flex justify-center mb-5">
+            <Logo size={40} />
           </div>
           <h1 style={{ fontFamily: 'var(--font-syne)' }} className="text-4xl font-bold text-stone-900 leading-snug mb-3">
             Score & optimize<br />your Airbnb listing
