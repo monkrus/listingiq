@@ -155,10 +155,17 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
       return
     }
 
-    // Detect duplicates by name + size
+    // Deduplicate against existing files AND within the new batch
     const existingKeys = new Set(files.map(f => `${f.name}_${f.size}`))
-    const dupes = valid.filter(f => existingKeys.has(`${f.name}_${f.size}`))
-    const unique = valid.filter(f => !existingKeys.has(`${f.name}_${f.size}`))
+    const seen = new Set<string>()
+    const unique: File[] = []
+    const dupes: File[] = []
+    for (const f of valid) {
+      const key = `${f.name}_${f.size}`
+      if (existingKeys.has(key) || seen.has(key)) { dupes.push(f); continue }
+      seen.add(key)
+      unique.push(f)
+    }
 
     if (dupes.length > 0) {
       messages.push(`${dupes.length} duplicate${dupes.length > 1 ? 's' : ''} removed (${dupes.map(f => f.name).join(', ')}).`)

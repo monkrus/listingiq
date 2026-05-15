@@ -29,8 +29,20 @@ export default function PhotoUploadStep({ onContinue, onSkip, uploading }: Props
     if (tooLarge.length > 0) messages.push(`${tooLarge.length} file${tooLarge.length > 1 ? 's' : ''} too large (max 4 MB each).`)
     if (!valid.length) { if (messages.length) setError(messages.join(' ')); return }
 
+    // Deduplicate against existing files AND within the new batch
     const existingKeys = new Set(files.map(f => `${f.name}_${f.size}`))
-    const unique = valid.filter(f => !existingKeys.has(`${f.name}_${f.size}`))
+    const seen = new Set<string>()
+    const unique: File[] = []
+    let dupeCount = 0
+    for (const f of valid) {
+      const key = `${f.name}_${f.size}`
+      if (existingKeys.has(key) || seen.has(key)) { dupeCount++; continue }
+      seen.add(key)
+      unique.push(f)
+    }
+    if (dupeCount > 0) {
+      messages.push(`${dupeCount} duplicate${dupeCount > 1 ? 's' : ''} removed.`)
+    }
     if (!unique.length) { if (messages.length) setError(messages.join(' ')); return }
 
     const spotsLeft = MAX_PHOTOS - files.length

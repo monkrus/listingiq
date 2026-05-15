@@ -367,12 +367,23 @@ export async function POST(req: NextRequest) {
 
     let report
     try {
+      const prompt = buildPrompt(listing, wasScraped)
+      if (!prompt) {
+        console.error('[analyze] Empty prompt — listing has no usable data')
+        await cancelPaymentIntent(paymentIntentId, alreadyCaptured)
+        settled = true
+        return NextResponse.json(
+          { error: 'Could not extract enough listing data to analyze. Please check the URL and try again.' },
+          { status: 422 }
+        )
+      }
+
       const message = await client.messages.create({
         model: (process.env.CLAUDE_MODEL as string) || 'claude-sonnet-4-6',
         max_tokens: 3000,
         temperature: 0,
         system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: buildPrompt(listing, wasScraped) }],
+        messages: [{ role: 'user', content: prompt }],
       })
 
       const raw = message.content
@@ -381,9 +392,36 @@ export async function POST(req: NextRequest) {
         .replace(/```json|```/g, '')
         .trim()
 
-      report = JSON.parse(raw)
-    } catch (apiErr) {
-      console.error('[analyze] API call failed:', apiErr instanceof Error ? apiErr.message : apiErr)
+      if (!raw) {
+        console.error('[analyze] Claude returned empty response. Stop reason:', message.stop_reason)
+        return NextResponse.json({ error: 'Analysis returned an empty result. Please try again.' }, { status: 502 })
+      }
+
+      try {
+        report = JSON.parse(raw)
+      } catch (parseErr) {
+        console.error('[analyze] JSON parse failed. Raw response (first 500 chars):', raw.substring(0, 500))
+        return NextResponse.json({ error: 'Analysis produced an invalid result. Please try again.' }, { status: 502 })
+      }
+    } catch (apiErr: unknown) {
+      const errMsg = apiErr instanceof Error ? apiErr.message : String(apiErr)
+      const statusCode = (apiErr as { status?: number })?.status
+      console.error(`[analyze] Claude API error (status=${statusCode}):`, errMsg)
+
+      // Provide specific error messages based on the failure type
+      if (statusCode === 401 || errMsg.includes('authentication') || errMsg.includes('invalid x-api-key')) {
+        return NextResponse.json({ error: 'AI service authentication failed. Please contact support.' }, { status: 502 })
+      }
+      if (statusCode === 429 || errMsg.includes('rate_limit')) {
+        return NextResponse.json({ error: 'AI service is temporarily busy. Please wait a moment and try again.' }, { status: 429 })
+      }
+      if (statusCode === 529 || errMsg.includes('overloaded')) {
+        return NextResponse.json({ error: 'AI service is temporarily overloaded. Please try again in a few minutes.' }, { status: 503 })
+      }
+      if (errMsg.includes('timeout') || errMsg.includes('ETIMEDOUT') || errMsg.includes('ECONNREFUSED')) {
+        return NextResponse.json({ error: 'AI service timed out. Please try again.' }, { status: 504 })
+      }
+
       return NextResponse.json({ error: 'Analysis failed. Please try again.' }, { status: 502 })
     }
 
