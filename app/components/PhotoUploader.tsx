@@ -108,6 +108,12 @@ const PHOTO_LOADING_STEPS = [
   'Compiling photo report...',
 ]
 
+async function hashFile(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const hash = await crypto.subtle.digest('SHA-256', buf)
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 export default function PhotoUploader({ listingContext, onResults, onPreviews, initialResults, initialPreviews }: { listingContext?: ListingContext; onResults?: (r: PhotoAnalysisResult | null) => void; onPreviews?: (p: string[]) => void; initialResults?: PhotoAnalysisResult | null; initialPreviews?: string[] | null } = {}) {
   const hasInitial = !!(initialResults && initialPreviews?.length)
   const [previews, setPreviews] = useState<string[]>(hasInitial ? initialPreviews! : [])
@@ -119,6 +125,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
   const [dragging, setDragging] = useState(false)
   const [loadingStepIndex, setLoadingStepIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileHashesRef = useRef<string[]>([])
 
   // Sync when initial props arrive after mount (e.g. async Supabase fetch on re-access)
   useEffect(() => {
@@ -134,7 +141,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
 
   const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4 MB per photo
 
-  const addFiles = useCallback((newFiles: FileList | File[]) => {
+  const addFiles = useCallback(async (newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles)
     const rejected = arr.filter(f => !ALLOWED_TYPES.includes(f.type))
     const tooLarge = arr.filter(f => ALLOWED_TYPES.includes(f.type) && f.size > MAX_FILE_SIZE)
@@ -155,16 +162,16 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
       return
     }
 
-    // Deduplicate against existing files AND within the new batch
-    const existingKeys = new Set(files.map(f => `${f.name}_${f.size}`))
-    const seen = new Set<string>()
-    const unique: File[] = []
+    // Content-based deduplication: hash file bytes to catch renamed copies
+    const existingHashes = new Set(fileHashesRef.current)
+    const seenHashes = new Set<string>()
+    const unique: Array<{ file: File; hash: string }> = []
     const dupes: File[] = []
     for (const f of valid) {
-      const key = `${f.name}_${f.size}`
-      if (existingKeys.has(key) || seen.has(key)) { dupes.push(f); continue }
-      seen.add(key)
-      unique.push(f)
+      const hash = await hashFile(f)
+      if (existingHashes.has(hash) || seenHashes.has(hash)) { dupes.push(f); continue }
+      seenHashes.add(hash)
+      unique.push({ file: f, hash })
     }
 
     if (dupes.length > 0) {
@@ -188,9 +195,10 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
     }
 
     setError(messages.length ? messages.join(' ') : '')
-    setFiles(prev => [...prev, ...toAdd])
+    setFiles(prev => [...prev, ...toAdd.map(u => u.file)])
+    fileHashesRef.current.push(...toAdd.map(u => u.hash))
 
-    toAdd.forEach(f => {
+    toAdd.forEach(({ file: f }) => {
       const reader = new FileReader()
       reader.onload = e => setPreviews(prev => [...prev, e.target?.result as string])
       reader.readAsDataURL(f)
@@ -206,6 +214,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
   function removePhoto(i: number) {
     setFiles(f => f.filter((_, idx) => idx !== i))
     setPreviews(p => p.filter((_, idx) => idx !== i))
+    fileHashesRef.current.splice(i, 1)
     setResult(null)
     setStep('upload')
     onResults?.(null)
@@ -270,6 +279,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
     setResult(null)
     setPreviews([])
     setFiles([])
+    fileHashesRef.current = []
     setError('')
     setStep('upload')
     onPreviews?.([])
@@ -331,7 +341,7 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
                     </label>
                   )}
                   <button
-                    onClick={e => { e.stopPropagation(); setFiles([]); setPreviews([]); setError('') }}
+                    onClick={e => { e.stopPropagation(); setFiles([]); setPreviews([]); setError(''); fileHashesRef.current = [] }}
                     className="text-xs text-stone-600 hover:text-stone-600 underline"
                   >
                     Clear all

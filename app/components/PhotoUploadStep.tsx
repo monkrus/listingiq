@@ -5,6 +5,12 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_PHOTOS = 10
 const MAX_FILE_SIZE = 4 * 1024 * 1024
 
+async function hashFile(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const hash = await crypto.subtle.digest('SHA-256', buf)
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 interface Props {
   onContinue: (files: File[], previews: string[]) => void
   onSkip?: () => void
@@ -17,8 +23,9 @@ export default function PhotoUploadStep({ onContinue, onSkip, uploading }: Props
   const [error, setError] = useState('')
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileHashesRef = useRef<string[]>([])
 
-  const addFiles = useCallback((newFiles: FileList | File[]) => {
+  const addFiles = useCallback(async (newFiles: FileList | File[]) => {
     const arr = Array.from(newFiles)
     const rejected = arr.filter(f => !ALLOWED_TYPES.includes(f.type))
     const tooLarge = arr.filter(f => ALLOWED_TYPES.includes(f.type) && f.size > MAX_FILE_SIZE)
@@ -29,16 +36,16 @@ export default function PhotoUploadStep({ onContinue, onSkip, uploading }: Props
     if (tooLarge.length > 0) messages.push(`${tooLarge.length} file${tooLarge.length > 1 ? 's' : ''} too large (max 4 MB each).`)
     if (!valid.length) { if (messages.length) setError(messages.join(' ')); return }
 
-    // Deduplicate against existing files AND within the new batch
-    const existingKeys = new Set(files.map(f => `${f.name}_${f.size}`))
-    const seen = new Set<string>()
-    const unique: File[] = []
+    // Content-based deduplication: hash file bytes to catch renamed copies
+    const existingHashes = new Set(fileHashesRef.current)
+    const seenHashes = new Set<string>()
+    const unique: Array<{ file: File; hash: string }> = []
     let dupeCount = 0
     for (const f of valid) {
-      const key = `${f.name}_${f.size}`
-      if (existingKeys.has(key) || seen.has(key)) { dupeCount++; continue }
-      seen.add(key)
-      unique.push(f)
+      const hash = await hashFile(f)
+      if (existingHashes.has(hash) || seenHashes.has(hash)) { dupeCount++; continue }
+      seenHashes.add(hash)
+      unique.push({ file: f, hash })
     }
     if (dupeCount > 0) {
       messages.push(`${dupeCount} duplicate${dupeCount > 1 ? 's' : ''} removed.`)
@@ -53,8 +60,9 @@ export default function PhotoUploadStep({ onContinue, onSkip, uploading }: Props
     if (skipped > 0) messages.push(`${skipped} photo${skipped > 1 ? 's' : ''} skipped — maximum ${MAX_PHOTOS} photos.`)
 
     setError(messages.length ? messages.join(' ') : '')
-    setFiles(prev => [...prev, ...toAdd])
-    toAdd.forEach(f => {
+    setFiles(prev => [...prev, ...toAdd.map(u => u.file)])
+    fileHashesRef.current.push(...toAdd.map(u => u.hash))
+    toAdd.forEach(({ file: f }) => {
       const reader = new FileReader()
       reader.onload = e => setPreviews(prev => [...prev, e.target?.result as string])
       reader.readAsDataURL(f)
@@ -70,6 +78,7 @@ export default function PhotoUploadStep({ onContinue, onSkip, uploading }: Props
   function removePhoto(i: number) {
     setFiles(f => f.filter((_, idx) => idx !== i))
     setPreviews(p => p.filter((_, idx) => idx !== i))
+    fileHashesRef.current.splice(i, 1)
   }
 
   return (
@@ -121,7 +130,7 @@ export default function PhotoUploadStep({ onContinue, onSkip, uploading }: Props
                   Add more
                 </label>
               )}
-              <button onClick={() => { setFiles([]); setPreviews([]); setError('') }} className="text-xs text-stone-500 hover:text-stone-600 underline">
+              <button onClick={() => { setFiles([]); setPreviews([]); setError(''); fileHashesRef.current = [] }} className="text-xs text-stone-500 hover:text-stone-600 underline">
                 Clear all
               </button>
             </div>
