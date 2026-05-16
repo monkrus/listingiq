@@ -1,6 +1,6 @@
 import sharp from 'sharp'
 
-const MAX_DIMENSION = 1024
+const MAX_DIMENSION = 768
 
 /**
  * Resize an image buffer so the longest edge is at most MAX_DIMENSION pixels.
@@ -15,13 +15,13 @@ export async function resizeForVision(input: Buffer): Promise<{ buffer: Buffer; 
 
   if (w <= MAX_DIMENSION && h <= MAX_DIMENSION) {
     // Already small enough — just convert to JPEG for consistent type
-    const out = await sharp(input).jpeg({ quality: 85 }).toBuffer()
+    const out = await sharp(input).jpeg({ quality: 72 }).toBuffer()
     return { buffer: out, mediaType: 'image/jpeg' }
   }
 
   const out = await sharp(input)
     .resize(MAX_DIMENSION, MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 85 })
+    .jpeg({ quality: 72 })
     .toBuffer()
 
   return { buffer: out, mediaType: 'image/jpeg' }
