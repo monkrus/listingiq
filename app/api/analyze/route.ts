@@ -366,63 +366,77 @@ export async function POST(req: NextRequest) {
     }
 
     let report
-    try {
-      const prompt = buildPrompt(listing, wasScraped)
-      if (!prompt) {
-        console.error('[analyze] Empty prompt — listing has no usable data')
-        await cancelPaymentIntent(paymentIntentId, alreadyCaptured)
-        settled = true
-        return NextResponse.json(
-          { error: 'Could not extract enough listing data to analyze. Please check the URL and try again.' },
-          { status: 422 }
-        )
-      }
+    const prompt = buildPrompt(listing, wasScraped)
+    if (!prompt) {
+      console.error('[analyze] Empty prompt — listing has no usable data')
+      await cancelPaymentIntent(paymentIntentId, alreadyCaptured)
+      settled = true
+      return NextResponse.json(
+        { error: 'Could not extract enough listing data to analyze. Please check the URL and try again.' },
+        { status: 422 }
+      )
+    }
 
-      const message = await client.messages.create({
-        model: (process.env.CLAUDE_MODEL as string) || 'claude-sonnet-4-6',
-        max_tokens: 3000,
-        temperature: 0,
-        system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: prompt }],
-      })
-
-      const raw = message.content
-        .map(b => (b.type === 'text' ? b.text : ''))
-        .join('')
-        .replace(/```json|```/g, '')
-        .trim()
-
-      if (!raw) {
-        console.error('[analyze] Claude returned empty response. Stop reason:', message.stop_reason)
-        return NextResponse.json({ error: 'Analysis returned an empty result. Please try again.' }, { status: 502 })
-      }
-
+    const MAX_RETRIES = 2
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        report = JSON.parse(raw)
-      } catch (parseErr) {
-        console.error('[analyze] JSON parse failed. Raw response (first 500 chars):', raw.substring(0, 500))
-        return NextResponse.json({ error: 'Analysis produced an invalid result. Please try again.' }, { status: 502 })
-      }
-    } catch (apiErr: unknown) {
-      const errMsg = apiErr instanceof Error ? apiErr.message : String(apiErr)
-      const statusCode = (apiErr as { status?: number })?.status
-      console.error(`[analyze] Claude API error (status=${statusCode}):`, errMsg)
+        const message = await client.messages.create({
+          model: (process.env.CLAUDE_MODEL as string) || 'claude-sonnet-4-6',
+          max_tokens: 3000,
+          temperature: 0,
+          system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+          messages: [{ role: 'user', content: prompt }],
+        })
 
-      // Provide specific error messages based on the failure type
-      if (statusCode === 401 || errMsg.includes('authentication') || errMsg.includes('invalid x-api-key')) {
-        return NextResponse.json({ error: 'AI service authentication failed. Please contact support.' }, { status: 502 })
-      }
-      if (statusCode === 429 || errMsg.includes('rate_limit')) {
-        return NextResponse.json({ error: 'AI service is temporarily busy. Please wait a moment and try again.' }, { status: 429 })
-      }
-      if (statusCode === 529 || errMsg.includes('overloaded')) {
-        return NextResponse.json({ error: 'AI service is temporarily overloaded. Please try again in a few minutes.' }, { status: 503 })
-      }
-      if (errMsg.includes('timeout') || errMsg.includes('ETIMEDOUT') || errMsg.includes('ECONNREFUSED')) {
-        return NextResponse.json({ error: 'AI service timed out. Please try again.' }, { status: 504 })
-      }
+        const raw = message.content
+          .map(b => (b.type === 'text' ? b.text : ''))
+          .join('')
+          .replace(/```json|```/g, '')
+          .trim()
 
-      return NextResponse.json({ error: 'Analysis failed. Please try again.' }, { status: 502 })
+        if (!raw) {
+          console.error(`[analyze] Attempt ${attempt}: Claude returned empty response. Stop reason:`, message.stop_reason)
+          if (attempt < MAX_RETRIES) continue
+          return NextResponse.json({ error: 'Analysis returned an empty result. Please try again.' }, { status: 502 })
+        }
+
+        try {
+          report = JSON.parse(raw)
+          break // success — exit retry loop
+        } catch (parseErr) {
+          console.error(`[analyze] Attempt ${attempt}: JSON parse failed. Raw (first 500 chars):`, raw.substring(0, 500))
+          if (attempt < MAX_RETRIES) continue
+          return NextResponse.json({ error: 'Analysis produced an invalid result. Please try again.' }, { status: 502 })
+        }
+      } catch (apiErr: unknown) {
+        const errMsg = apiErr instanceof Error ? apiErr.message : String(apiErr)
+        const statusCode = (apiErr as { status?: number })?.status
+        console.error(`[analyze] Attempt ${attempt}: Claude API error (status=${statusCode}):`, errMsg)
+
+        // Don't retry auth failures
+        if (statusCode === 401 || errMsg.includes('authentication') || errMsg.includes('invalid x-api-key')) {
+          return NextResponse.json({ error: 'AI service authentication failed. Please contact support.' }, { status: 502 })
+        }
+
+        if (attempt < MAX_RETRIES) {
+          // Brief pause before retry for transient errors
+          await new Promise(r => setTimeout(r, 2000))
+          continue
+        }
+
+        // Final attempt failed — return specific error
+        if (statusCode === 429 || errMsg.includes('rate_limit')) {
+          return NextResponse.json({ error: 'AI service is temporarily busy. Please wait a moment and try again.' }, { status: 429 })
+        }
+        if (statusCode === 529 || errMsg.includes('overloaded')) {
+          return NextResponse.json({ error: 'AI service is temporarily overloaded. Please try again in a few minutes.' }, { status: 503 })
+        }
+        if (errMsg.includes('timeout') || errMsg.includes('ETIMEDOUT') || errMsg.includes('ECONNREFUSED')) {
+          return NextResponse.json({ error: 'AI service timed out. Please try again.' }, { status: 504 })
+        }
+
+        return NextResponse.json({ error: 'Analysis failed. Please try again.' }, { status: 502 })
+      }
     }
 
     // Post-processing: catch and fix AI errors before sending to client
