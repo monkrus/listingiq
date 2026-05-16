@@ -55,3 +55,13 @@ export function setCachedReport(url: string, plan: string, data: unknown): void 
   const key = buildKey(url, plan)
   cache.set(key, { data, createdAt: Date.now() })
 }
+
+/** Merge photo results into an existing cached report (called after photo analysis completes) */
+export function updateCachedReportPhotos(url: string, plan: string, photoResults: unknown, photoPreviews?: unknown): void {
+  const key = buildKey(url, plan)
+  const entry = cache.get(key)
+  if (!entry || Date.now() - entry.createdAt > TTL) return
+  const report = entry.data as Record<string, unknown>
+  report.cachedPhotoResults = photoResults
+  report.cachedPhotoPreviews = photoPreviews ?? null
+}

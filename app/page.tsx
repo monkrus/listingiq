@@ -284,11 +284,12 @@ export default function Home() {
             const isReaccess = !!payload.reaccess
 
             // Priority 1: Try server-side photo store (user uploaded before payment)
+            const cacheInfo = { listingUrl: data.listingUrl || '', plan }
             if (uploadId) {
               photoRes = await fetch('/api/analyze-photos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uploadId, sessionId, listingContext, reaccess: isReaccess }),
+                body: JSON.stringify({ uploadId, sessionId, listingContext, reaccess: isReaccess, ...cacheInfo }),
               })
             }
 
@@ -301,6 +302,8 @@ export default function Home() {
                 savedFiles.forEach(f => form.append('photos', f))
                 form.append('sessionId', sessionId || '')
                 form.append('listingContext', JSON.stringify(listingContext))
+                form.append('listingUrl', cacheInfo.listingUrl)
+                form.append('plan', plan)
                 photoRes = await fetch('/api/analyze-photos', { method: 'POST', body: form })
               }
             }
@@ -310,7 +313,7 @@ export default function Home() {
               photoRes = await fetch('/api/analyze-photos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ photoUrls: data.photoUrls, sessionId, listingContext, reaccess: isReaccess }),
+                body: JSON.stringify({ photoUrls: data.photoUrls, sessionId, listingContext, reaccess: isReaccess, ...cacheInfo }),
               })
             }
 

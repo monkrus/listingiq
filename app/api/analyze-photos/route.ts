@@ -11,6 +11,7 @@ import { isValidPhotoUrl } from '@/app/lib/validation'
 import { resizeForVision } from '@/app/lib/resize-image'
 import { logAnalyticsEvent } from '@/app/lib/analytics'
 import { triggerReportEmail } from '@/app/lib/trigger-report-email'
+import { updateCachedReportPhotos } from '@/app/lib/report-cache'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -165,12 +166,16 @@ export async function POST(req: NextRequest) {
     let listingContextRaw: string | null = null
     let uploadId: string | null = null
     let reaccess = false
+    let listingUrl = ''
+    let plan = 'full-audit'
 
     if (contentType.includes('application/json')) {
       const body = await req.json()
       sessionId = body.sessionId
       reaccess = body.reaccess === true
       listingContextRaw = body.listingContext ? JSON.stringify(body.listingContext) : null
+      listingUrl = body.listingUrl || ''
+      plan = body.plan || 'full-audit'
 
       if (body.photoUrls?.length) {
         // Mode C: URL-based photos from scraper — validate each URL against allowed CDN hosts
@@ -196,6 +201,8 @@ export async function POST(req: NextRequest) {
       files = formData.getAll('photos') as File[]
       sessionId = formData.get('sessionId') as string | null
       listingContextRaw = formData.get('listingContext') as string | null
+      listingUrl = (formData.get('listingUrl') as string) || ''
+      plan = (formData.get('plan') as string) || 'full-audit'
 
       if (!files.length) {
         return NextResponse.json({ error: 'No photos provided' }, { status: 400 })
@@ -461,6 +468,12 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
     } else if (storedPhotos) {
       const previews = storedPhotos.map(p => `data:${p.mediaType};base64,${p.base64}`)
       responseData = { ...result, previews }
+    }
+
+    // Update LRU cache so subsequent cache hits include photo results
+    if (listingUrl) {
+      const previews = (responseData.previews as string[]) || null
+      updateCachedReportPhotos(listingUrl, plan, result, previews)
     }
 
     // Cache photo results in Supabase for email re-access (awaited so cache is
