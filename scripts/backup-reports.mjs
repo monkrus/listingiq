@@ -39,25 +39,34 @@ if (!url || !key) {
 const db = createClient(url, key, { auth: { persistSession: false } })
 
 async function main() {
-  console.log('Fetching cached_reports...')
+  console.log('Fetching cached_reports (paginated, excluding photo_previews)...')
 
-  const { data, error } = await db
-    .from('cached_reports')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const PAGE_SIZE = 500
+  let allData = []
+  let from = 0
 
-  if (error) {
-    console.error('Query failed:', error)
-    process.exit(1)
+  while (true) {
+    const { data, error } = await db
+      .from('cached_reports')
+      .select('session_id, plan, listing_url, report_data, photo_results, email_sent_at, created_at')
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1)
+
+    if (error) {
+      console.error('Query failed:', error)
+      process.exit(1)
+    }
+
+    allData = allData.concat(data)
+    console.log(`  Fetched ${data.length} rows (total: ${allData.length})`)
+
+    if (data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
   }
 
-  console.log(`Found ${data.length} reports`)
+  console.log(`Found ${allData.length} reports`)
 
-  // Strip photo_previews to keep backup file small (base64 images are huge)
-  const lightweight = data.map(row => ({
-    ...row,
-    photo_previews: row.photo_previews ? `[${row.photo_previews.length} items]` : null,
-  }))
+  const lightweight = allData
 
   // Write to backups/ directory
   const backupDir = path.resolve(process.cwd(), 'backups')
