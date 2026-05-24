@@ -18,14 +18,42 @@ export async function GET(req: NextRequest) {
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId)
 
-    // Accept both captured ('paid') and authorized-but-not-yet-captured
-    // ('unpaid' with a payment_intent) — manual capture flow authorizes
-    // the card at checkout and only captures after a successful analysis.
-    const isCaptured = session.payment_status === 'paid'
-    const isAuthorized = session.payment_status === 'unpaid' && !!session.payment_intent
-    const isComplete = session.status === 'complete'
+    if (session.status !== 'complete') {
+      return NextResponse.json({ verified: false, error: 'Payment not completed' })
+    }
 
-    if (isComplete && (isCaptured || isAuthorized)) {
+    // Accept both captured ('paid') and authorized-but-not-yet-captured
+    // ('unpaid' with a payment_intent in 'requires_capture' status).
+    // Must match the strict check in verifyPayment so failures surface here
+    // (with proper error UI) instead of later on the main page.
+    const isCaptured = session.payment_status === 'paid'
+    const isFree = session.payment_status === 'no_payment_required'
+
+    let isAuthorized = false
+    if (!isCaptured && !isFree && session.payment_status === 'unpaid') {
+      const paymentIntentId = typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id
+      if (paymentIntentId) {
+        // Retry once after a short delay to handle Stripe propagation timing
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const pi = await stripe.paymentIntents.retrieve(paymentIntentId)
+            if (pi.status === 'requires_capture') {
+              isAuthorized = true
+              break
+            }
+            console.warn(`[verify-session] PI ${paymentIntentId} status is '${pi.status}' (attempt ${attempt + 1})`)
+            if (attempt === 0) await new Promise(r => setTimeout(r, 1500))
+          } catch (err) {
+            console.error(`[verify-session] Failed to retrieve PI ${paymentIntentId} (attempt ${attempt + 1}):`, err)
+            if (attempt === 0) await new Promise(r => setTimeout(r, 1500))
+          }
+        }
+      }
+    }
+
+    if (isCaptured || isFree || isAuthorized) {
       return NextResponse.json({
         verified: true,
         plan: session.metadata?.planKey || 'quick-score',

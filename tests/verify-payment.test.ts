@@ -98,15 +98,17 @@ describe('verifyPayment', () => {
     expect(result.error).toContain('not completed')
   })
 
-  it('rejects complete session with no_payment_required and no PI', async () => {
+  it('accepts complete session with no_payment_required (100% discount)', async () => {
     retrieveSessionFn.mockResolvedValue({
       status: 'complete',
       payment_status: 'no_payment_required',
       payment_intent: null,
-      metadata: {},
+      metadata: { planKey: 'full-audit' },
     })
     const result = await verifyPayment('cs_free')
-    expect(result.valid).toBe(false)
+    expect(result.valid).toBe(true)
+    expect(result.plan).toBe('full-audit')
+    expect(result.captured).toBe(true)
   })
 
   it('defaults to quick-score when no planKey in metadata', async () => {
@@ -131,6 +133,36 @@ describe('verifyPayment', () => {
     const result = await verifyPayment('cs_expanded')
     expect(result.valid).toBe(true)
     expect(result.paymentIntentId).toBe('pi_expanded_obj')
+  })
+
+  it('retries PI retrieval and succeeds on second attempt', async () => {
+    retrieveSessionFn.mockResolvedValue({
+      status: 'complete',
+      payment_status: 'unpaid',
+      payment_intent: 'pi_retry',
+      metadata: { planKey: 'quick-score' },
+    })
+    retrievePiFn
+      .mockResolvedValueOnce({ status: 'processing' })
+      .mockResolvedValueOnce({ status: 'requires_capture' })
+    const result = await verifyPayment('cs_retry')
+    expect(result.valid).toBe(true)
+    expect(retrievePiFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries PI retrieval on network error and succeeds', async () => {
+    retrieveSessionFn.mockResolvedValue({
+      status: 'complete',
+      payment_status: 'unpaid',
+      payment_intent: 'pi_net_retry',
+      metadata: { planKey: 'quick-score' },
+    })
+    retrievePiFn
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce({ status: 'requires_capture' })
+    const result = await verifyPayment('cs_net_retry')
+    expect(result.valid).toBe(true)
+    expect(retrievePiFn).toHaveBeenCalledTimes(2)
   })
 
   it('returns invalid on Stripe API error', async () => {
