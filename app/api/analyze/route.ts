@@ -382,7 +382,7 @@ export async function POST(req: NextRequest) {
       try {
         const message = await client.messages.create({
           model: (process.env.CLAUDE_MODEL as string) || 'claude-sonnet-4-6',
-          max_tokens: 3000,
+          max_tokens: 4096,
           temperature: 0,
           system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
           messages: [{ role: 'user', content: prompt }],
@@ -404,7 +404,7 @@ export async function POST(req: NextRequest) {
           report = JSON.parse(raw)
           break // success — exit retry loop
         } catch (parseErr) {
-          console.error(`[analyze] Attempt ${attempt}: JSON parse failed. Raw (first 500 chars):`, raw.substring(0, 500))
+          console.error(`[analyze] Attempt ${attempt}: JSON parse failed. stop_reason=${message.stop_reason}, length=${raw.length}. First 500 chars:`, raw.substring(0, 500), '… Last 100 chars:', raw.substring(raw.length - 100))
           if (attempt < MAX_RETRIES) continue
           return NextResponse.json({ error: 'Analysis produced an invalid result. Please try again.' }, { status: 502 })
         }
