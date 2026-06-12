@@ -7,9 +7,11 @@ export async function POST(req: NextRequest) {
   const originBlock = checkOrigin(req)
   if (originBlock) return originBlock
 
-  // Rate limit: 3 email sends per minute per IP
+  // Rate limit: 6 email sends per minute per IP
+  // (server-side triggers from analyze + analyze-photos + client-side sendReportEmail
+  //  can stack up quickly, especially for Full Audit)
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-  const { limited } = rateLimit(ip, 3, 60_000)
+  const { limited } = rateLimit(ip, 6, 60_000)
   if (limited) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }

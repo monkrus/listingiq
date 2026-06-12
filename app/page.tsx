@@ -47,6 +47,7 @@ export default function Home() {
   const [photoUploading, setPhotoUploading] = useState(false)
   const [initialPhotoResults, setInitialPhotoResults] = useState<PhotoAnalysisResult | null>(null)
   const [initialPhotoPreviews, setInitialPhotoPreviews] = useState<string[] | null>(null)
+  const [photoError, setPhotoError] = useState(false)
   // Hydrating: true while useEffect resolves a returning user (email re-access or saved report).
   // Prevents the input form from flashing for 1-2s before the report renders.
   const [hydrating, setHydrating] = useState<boolean>(() => {
@@ -246,6 +247,7 @@ export default function Home() {
     setReport(null)
     setInitialPhotoResults(null)
     setInitialPhotoPreviews(null)
+    setPhotoError(false)
 
     const plan = planOverride || activePlan
     // Check for user-uploaded photos
@@ -342,10 +344,15 @@ export default function Home() {
                 clearPendingPhotos()
               } else {
                 console.warn('[analyze] Photo analysis failed:', photoData.error)
+                setPhotoError(true)
               }
+            } else {
+              // No photo analysis was triggered (e.g. no photoUrls from scraper)
+              setPhotoError(true)
             }
           } catch (photoErr) {
             console.warn('[analyze] Photo analysis error:', photoErr)
+            setPhotoError(true)
           }
         }
       }
@@ -517,6 +524,7 @@ export default function Home() {
         initialPhotoResults={initialPhotoResults}
         initialPhotoPreviews={initialPhotoPreviews}
         onUpgrade={handleUpgradeToFullAudit}
+        photoError={photoError}
       />
     </main>
   )

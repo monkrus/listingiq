@@ -18,6 +18,7 @@ interface Props {
   initialPhotoResults?: PhotoAnalysisResult | null
   initialPhotoPreviews?: string[] | null
   onUpgrade?: () => void
+  photoError?: boolean
 }
 
 const ProblemTag = ({ text }: { text: string }) => (
@@ -46,7 +47,7 @@ function scoreColor(s: number) {
   return s >= 80 ? '#4a7c2f' : s >= 60 ? '#b45309' : '#b91c1c'
 }
 
-export default function Report({ data: rawData, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null, onUpgrade }: Props) {
+export default function Report({ data: rawData, onReset, plan = 'quick-score', isDemo = false, listingUrl = '', initialPhotoResults = null, initialPhotoPreviews = null, onUpgrade, photoError = false }: Props) {
   // Ensure all array fields have safe defaults to prevent crashes from incomplete AI responses
   const d: ReportData = {
     ...rawData,
@@ -166,8 +167,10 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
               </>
             ) : (
               <>
-                <div style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-300 mt-1">—</div>
-                <div className="text-[10px] text-stone-400 mt-1">Pending</div>
+                <div style={{ fontFamily: 'var(--font-syne)' }} className={`text-sm font-bold mt-1 ${photoError ? 'text-red-300' : 'text-stone-300'}`}>—</div>
+                <div className={`text-[10px] mt-1 ${photoError ? 'text-red-400' : 'text-stone-400'}`}>
+                  {photoError ? 'Failed' : 'Pending'}
+                </div>
               </>
             )}
           </div>

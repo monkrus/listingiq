@@ -289,27 +289,32 @@ export async function POST(req: NextRequest) {
       // match the actual bytes (e.g. image/jpeg header on a PNG payload),
       // causing Anthropic to 400 with "The image was specified using the
       // image/jpeg media type, but the image appears to be a image/png image".
-      for (let i = 0; i < photoUrls.length; i++) {
-        try {
-          const imgRes = await fetch(photoUrls[i])
-          if (!imgRes.ok) { console.warn(`[photo-analyze] Failed to fetch photo ${i + 1}: HTTP ${imgRes.status}`); continue }
+      // Download all photos in parallel for speed (was sequential before)
+      const photoResults = await Promise.allSettled(
+        photoUrls.map(async (url, i) => {
+          const imgRes = await fetch(url)
+          if (!imgRes.ok) throw new Error(`HTTP ${imgRes.status}`)
           const buf = await imgRes.arrayBuffer()
           const realType = detectImageType(buf)
-          if (!realType) {
-            console.warn(`[photo-analyze] Photo ${i + 1} failed magic-byte detection, skipping`)
-            continue
-          }
-          // Resize to max 1024px to cut Claude Vision token cost ~4x
+          if (!realType) throw new Error('failed magic-byte detection')
           const resized = await resizeForVision(Buffer.from(buf))
-          const base64 = resized.buffer.toString('base64')
-          const name = `listing-photo-${i + 1}.jpg`
-          labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${name}]` })
-          labeledContents.push({ type: 'image', source: { type: 'base64', media_type: resized.mediaType, data: base64 } })
-          filenames.push(name)
-          listingPhotoPreviews.push(`data:${resized.mediaType};base64,${base64}`)
-        } catch (err) {
-          console.warn(`[photo-analyze] Failed to download photo ${i + 1}:`, err)
+          return { index: i, resized }
+        })
+      )
+      // Collect successful downloads in original order
+      for (let i = 0; i < photoResults.length; i++) {
+        const result = photoResults[i]
+        if (result.status === 'rejected') {
+          console.warn(`[photo-analyze] Failed to download photo ${i + 1}:`, result.reason)
+          continue
         }
+        const { resized } = result.value
+        const base64 = resized.buffer.toString('base64')
+        const name = `listing-photo-${i + 1}.jpg`
+        labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${name}]` })
+        labeledContents.push({ type: 'image', source: { type: 'base64', media_type: resized.mediaType, data: base64 } })
+        filenames.push(name)
+        listingPhotoPreviews.push(`data:${resized.mediaType};base64,${base64}`)
       }
       if (!filenames.length) {
         return NextResponse.json({ error: 'Could not download listing photos. Please upload photos manually.' }, { status: 502 })
