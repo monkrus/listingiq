@@ -4,18 +4,27 @@
  */
 export function isValidAirbnbUrl(url: string): boolean {
   try {
-    const u = new URL(url)
+    // Auto-prepend https:// if no protocol given
+    const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`
+    const u = new URL(normalized)
     // Hostname: must be airbnb.XX or airbnb.XX.YY (e.g. airbnb.com, airbnb.co.uk)
     // Blocks domain spoofing like airbnb.com.evil.com
     const validHost = /^(www\.)?airbnb\.([a-z]{2,3})(\.([a-z]{2}))?$/.test(u.hostname)
-    // Pathname: must be /rooms/DIGITS only — no trailing scripts, injections, etc.
-    const validPath = /^\/rooms\/\d+\/?$/.test(u.pathname)
-    // Protocol must be https
-    const validProtocol = u.protocol === 'https:'
-    return validHost && validPath && validProtocol
+    // Pathname: /rooms/DIGITS with optional clean trailing segments (e.g. /photos)
+    const validPath = /^\/rooms\/\d+(\/[\w-]*)*\/?$/.test(u.pathname)
+    return validHost && validPath
   } catch {
     return false
   }
+}
+
+/** Normalize an Airbnb URL to a clean canonical form for the scraper */
+export function normalizeAirbnbUrl(url: string): string {
+  const withProtocol = /^https?:\/\//i.test(url) ? url : `https://${url}`
+  const u = new URL(withProtocol)
+  const match = u.pathname.match(/\/rooms\/(\d+)/)
+  if (!match) return withProtocol
+  return `https://${u.hostname}/rooms/${match[1]}`
 }
 
 /** Allowed hostnames for Airbnb photo CDN URLs (SSRF prevention) */

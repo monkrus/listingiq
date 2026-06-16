@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { ReportData, ListingInput } from './lib/types'
-import { isValidAirbnbUrl } from './lib/validation'
+import { isValidAirbnbUrl, normalizeAirbnbUrl } from './lib/validation'
 import { DEMO_LISTING, DEMO_REPORT, DEMO_PHOTO_RESULT, DEMO_PHOTO_PREVIEWS } from './lib/demo'
 import Report from './components/Report'
 import { APP_VERSION } from './lib/version'
@@ -394,9 +394,10 @@ export default function Home() {
       setError('Please enter a valid Airbnb listing URL (e.g., https://airbnb.com/rooms/12345).')
       return
     }
-    localStorage.setItem('listingiq_url', trimmed)
+    const cleanUrl = normalizeAirbnbUrl(trimmed)
+    localStorage.setItem('listingiq_url', cleanUrl)
     if (isPaid) {
-      analyze({ url: trimmed })
+      analyze({ url: cleanUrl })
       return
     }
     setStep('plan')

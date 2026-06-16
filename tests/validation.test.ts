@@ -47,8 +47,17 @@ describe('isValidAirbnbUrl', () => {
     expect(isValidAirbnbUrl('javascript:alert(1)')).toBe(false)
   })
 
-  it('rejects http (requires https)', () => {
-    expect(isValidAirbnbUrl('http://www.airbnb.com/rooms/12345')).toBe(false)
+  it('accepts http URLs', () => {
+    expect(isValidAirbnbUrl('http://www.airbnb.com/rooms/12345')).toBe(true)
+  })
+
+  it('accepts URLs without protocol', () => {
+    expect(isValidAirbnbUrl('www.airbnb.com/rooms/12345')).toBe(true)
+    expect(isValidAirbnbUrl('airbnb.com/rooms/12345')).toBe(true)
+  })
+
+  it('accepts URLs with trailing path segments', () => {
+    expect(isValidAirbnbUrl('https://www.airbnb.com/rooms/12345/photos')).toBe(true)
   })
 
   // Security: XSS / injection attempts
