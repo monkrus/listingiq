@@ -96,6 +96,7 @@ vi.mock('@/app/lib/validate-image', () => ({
 
 vi.mock('@/app/lib/validation', () => ({
   isValidPhotoUrl: vi.fn(() => true),
+  normalizeAirbnbUrl: vi.fn((url: string) => url),
 }))
 
 import { POST as analyzePost } from '@/app/api/analyze/route'

@@ -26,6 +26,8 @@ backups/
 
 # test
 test-results/
+scripts/regression-output/
+scripts/regression-output-baseline/
 
 # debug
 npm-debug.log*
