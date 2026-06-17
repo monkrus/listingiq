@@ -28,6 +28,8 @@ backups/
 test-results/
 scripts/regression-output/
 scripts/regression-output-baseline/
+scripts/hostex-fetch-output/
+scripts/hostex-vs-manual-output/
 
 # debug
 npm-debug.log*
