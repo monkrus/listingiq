@@ -1,0 +1,139 @@
+{
+  "_comment": "Mock fixture built from the Hospitable Public API v2 OpenAPI schema (Review object in openapi.yaml). Field names are unconfirmed until validated against a real API response. Keyed by property UUID to match the per-property reviews endpoint: GET /properties/{uuid}/reviews.",
+  "550e8400-e29b-41d4-a716-446655440001": {
+    "data": [
+      {
+        "id": "review-uuid-001",
+        "platform": "airbnb",
+        "public": {
+          "rating": 5,
+          "review": "Absolutely incredible stay! The ocean views were breathtaking and the pool was amazing. We loved the rooftop hot tub at sunset. Everything was spotless and exactly as described. Will definitely be back!",
+          "response": "Thank you so much! We're thrilled you enjoyed the views and the pool. Can't wait to host you again!"
+        },
+        "private": {
+          "feedback": "Everything was perfect.",
+          "detailed_ratings": [
+            { "type": "cleanliness", "rating": 5, "comment": "Spotless" },
+            { "type": "communication", "rating": 5, "comment": "Very responsive" },
+            { "type": "location", "rating": 5, "comment": "Right on the beach" },
+            { "type": "checkin", "rating": 5, "comment": "Smooth self check-in" },
+            { "type": "accuracy", "rating": 5, "comment": "Exactly as pictured" },
+            { "type": "value", "rating": 4, "comment": "A bit pricey but worth it" }
+          ]
+        },
+        "responded_at": "2025-12-16T10:00:00Z",
+        "reviewed_at": "2025-12-15T08:30:00Z",
+        "can_respond": false,
+        "guest": {
+          "first_name": "Sarah",
+          "last_name": "M.",
+          "language": "en"
+        }
+      },
+      {
+        "id": "review-uuid-002",
+        "platform": "airbnb",
+        "public": {
+          "rating": 4,
+          "review": "Great location and beautiful property. The kitchen was well-stocked. Only minor issue was the wifi was a bit slow for video calls. Otherwise a fantastic stay.",
+          "response": "Thanks for the feedback! We've since upgraded our internet — hope to see you again."
+        },
+        "private": {
+          "feedback": "Wifi could be better for remote work.",
+          "detailed_ratings": [
+            { "type": "cleanliness", "rating": 5, "comment": "" },
+            { "type": "communication", "rating": 5, "comment": "" },
+            { "type": "location", "rating": 5, "comment": "" },
+            { "type": "checkin", "rating": 5, "comment": "" },
+            { "type": "accuracy", "rating": 4, "comment": "" },
+            { "type": "value", "rating": 4, "comment": "" }
+          ]
+        },
+        "responded_at": "2025-11-20T14:00:00Z",
+        "reviewed_at": "2025-11-19T16:45:00Z",
+        "can_respond": false,
+        "guest": {
+          "first_name": "James",
+          "last_name": "K.",
+          "language": "en"
+        }
+      },
+      {
+        "id": "review-uuid-003",
+        "platform": "airbnb",
+        "public": {
+          "rating": 5,
+          "review": "Paradise found! Best Airbnb we've ever stayed at. The rooftop deck is unreal.",
+          "response": ""
+        },
+        "private": {
+          "feedback": "",
+          "detailed_ratings": null
+        },
+        "responded_at": null,
+        "reviewed_at": "2025-10-05T12:00:00Z",
+        "can_respond": true,
+        "guest": {
+          "first_name": "Maria",
+          "last_name": "L.",
+          "language": "es"
+        }
+      }
+    ],
+    "meta": {
+      "current_page": 1,
+      "from": 1,
+      "last_page": 1,
+      "per_page": 50,
+      "to": 3,
+      "total": 3,
+      "links": []
+    }
+  },
+  "550e8400-e29b-41d4-a716-446655440002": {
+    "data": [
+      {
+        "id": "review-uuid-004",
+        "platform": "airbnb",
+        "public": {
+          "rating": 3,
+          "review": "Decent place for the price. Very small though and the description could use more detail.",
+          "response": ""
+        },
+        "private": {
+          "feedback": "Needs better towels.",
+          "detailed_ratings": null
+        },
+        "responded_at": null,
+        "reviewed_at": "2026-01-10T09:00:00Z",
+        "can_respond": true,
+        "guest": {
+          "first_name": "Tom",
+          "last_name": "R.",
+          "language": "en"
+        }
+      }
+    ],
+    "meta": {
+      "current_page": 1,
+      "from": 1,
+      "last_page": 1,
+      "per_page": 50,
+      "to": 1,
+      "total": 1,
+      "links": []
+    }
+  },
+  "550e8400-e29b-41d4-a716-446655440003": {
+    "data": [],
+    "meta": {
+      "current_page": 1,
+      "from": null,
+      "last_page": 1,
+      "per_page": 50,
+      "to": null,
+      "total": 0,
+      "links": []
+    }
+  }
+}

@@ -1,0 +1,186 @@
+{
+  "_comment": "Mock fixture built from the Hospitable Public API v2 OpenAPI schema (openapi.yaml in github.com/keithah/hospitable-python). Field names are unconfirmed until validated against a real API response.",
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "name": "Beach House Internal",
+      "public_name": "Stunning Oceanfront Beach House — Private Pool & Rooftop Deck",
+      "picture": "https://cdn2.example.com/photos/beach-house-main.jpg",
+      "address": {
+        "number": "42",
+        "street": "Ocean Drive",
+        "city": "Miami Beach",
+        "state": "FL",
+        "country": "US",
+        "postcode": "33139",
+        "coordinates": {
+          "latitude": 25.7907,
+          "longitude": -80.1300
+        },
+        "display": "42 Ocean Drive, Miami Beach, FL 33139, US"
+      },
+      "timezone": "-0500",
+      "listed": true,
+      "amenities": [
+        "wifi",
+        "pool",
+        "air_conditioning",
+        "kitchen",
+        "free_parking",
+        "washer",
+        "dryer",
+        "tv",
+        "hot_tub",
+        "beach_access",
+        "bbq_grill",
+        "outdoor_dining",
+        "self_check_in",
+        "smoke_alarm",
+        "carbon_monoxide_alarm",
+        "fire_extinguisher"
+      ],
+      "description": "Wake up to the sound of waves in this stunning oceanfront beach house. Floor-to-ceiling windows frame panoramic ocean views from every room. The open-plan living area flows onto a private deck with an infinity pool overlooking the Atlantic.\n\nThe fully equipped gourmet kitchen features stainless steel appliances, a 6-burner gas range, and a breakfast bar seating 4. Two luxurious bedrooms each have en-suite bathrooms with rainfall showers.\n\nStep out your back door onto the sand — the beach is literally your backyard. The rooftop deck is perfect for sunset cocktails, with a hot tub and outdoor dining area.\n\nLocated on iconic Ocean Drive, you're steps from South Beach's best restaurants, nightlife, and shopping. Art Deco Historic District is a 5-minute walk.",
+      "summary": "Oceanfront beach house with private pool and rooftop deck in Miami Beach",
+      "check-in": "16:00",
+      "check-out": "11:00",
+      "currency": "USD",
+      "capacity": {
+        "max": 6,
+        "bedrooms": 2,
+        "beds": 3,
+        "bathrooms": 2.5
+      },
+      "room_details": [
+        { "type": "king_size", "quantity": 1 },
+        { "type": "queen_size", "quantity": 1 },
+        { "type": "sofa_bed", "quantity": 1 }
+      ],
+      "house_rules": {
+        "pets_allowed": false,
+        "smoking_allowed": false,
+        "events_allowed": false
+      },
+      "listings": [
+        {
+          "platform": "airbnb",
+          "platform_id": "12345678",
+          "platform_name": "Stunning Oceanfront Beach House"
+        },
+        {
+          "platform": "booking",
+          "platform_id": "BK-998877",
+          "platform_name": "Ocean Drive Beach House"
+        }
+      ],
+      "tags": ["beach", "luxury", "pool"],
+      "property_type": "house",
+      "room_type": "entire_home",
+      "calendar_restricted": false
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "name": "Downtown Studio",
+      "public_name": "Cozy Studio",
+      "picture": "https://cdn2.example.com/photos/studio-main.jpg",
+      "address": {
+        "number": "8",
+        "street": "Main St",
+        "city": "Austin",
+        "state": "TX",
+        "country": "US",
+        "postcode": "78701",
+        "coordinates": {
+          "latitude": 30.2672,
+          "longitude": -97.7431
+        },
+        "display": "8 Main St, Austin, TX 78701, US"
+      },
+      "timezone": "-0600",
+      "listed": true,
+      "amenities": ["wifi", "tv"],
+      "description": "Small studio downtown.",
+      "summary": "Studio in Austin",
+      "check-in": "15:00",
+      "check-out": "10:00",
+      "currency": "USD",
+      "capacity": {
+        "max": 2,
+        "bedrooms": 0,
+        "beds": 1,
+        "bathrooms": 1
+      },
+      "room_details": [
+        { "type": "double", "quantity": 1 }
+      ],
+      "house_rules": {
+        "pets_allowed": true,
+        "smoking_allowed": false,
+        "events_allowed": null
+      },
+      "listings": [
+        {
+          "platform": "airbnb",
+          "platform_id": "87654321",
+          "platform_name": "Cozy Studio"
+        }
+      ],
+      "tags": [],
+      "property_type": "apartment",
+      "room_type": "entire_home",
+      "calendar_restricted": false
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440003",
+      "name": "Test Property No Content",
+      "public_name": "",
+      "picture": "",
+      "address": {
+        "number": "",
+        "street": "",
+        "city": "",
+        "state": "",
+        "country": "",
+        "postcode": "",
+        "coordinates": {
+          "latitude": 0,
+          "longitude": 0
+        },
+        "display": ""
+      },
+      "timezone": "+0000",
+      "listed": false,
+      "amenities": [],
+      "description": "",
+      "summary": "",
+      "check-in": "14:00",
+      "check-out": "11:00",
+      "currency": "USD",
+      "capacity": {
+        "max": null,
+        "bedrooms": null,
+        "beds": null,
+        "bathrooms": null
+      },
+      "room_details": [],
+      "house_rules": {
+        "pets_allowed": false,
+        "smoking_allowed": false,
+        "events_allowed": null
+      },
+      "listings": [],
+      "tags": [],
+      "property_type": "",
+      "room_type": "",
+      "calendar_restricted": false
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 1,
+    "per_page": 100,
+    "to": 3,
+    "total": 3,
+    "links": []
+  }
+}
