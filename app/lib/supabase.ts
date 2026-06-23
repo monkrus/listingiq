@@ -248,3 +248,66 @@ export async function getReportsThisMonth(userId: string): Promise<number> {
     .gte('created_at', start.toISOString())
   return count ?? 0
 }
+
+// ---- Hospitable OAuth token storage ----
+
+export interface HospitableConnection {
+  connection_id: string
+  access_token: string
+  refresh_token: string
+  token_expires_at: string
+}
+
+/** Save Hospitable OAuth tokens; returns the connection_id (UUID). */
+export async function saveHospitableTokens(
+  accessToken: string,
+  refreshToken: string,
+  expiresIn: number
+): Promise<string | null> {
+  const db = getSupabaseAdmin()
+  if (!db) { console.warn('[db] Supabase not configured, skipping saveHospitableTokens'); return null }
+  const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
+  const { data, error } = await db
+    .from('hospitable_connections')
+    .insert({ access_token: accessToken, refresh_token: refreshToken, token_expires_at: expiresAt })
+    .select('connection_id')
+    .single()
+  if (error) { console.error('[db] saveHospitableTokens:', error); return null }
+  return data.connection_id
+}
+
+/** Get Hospitable connection by ID. Returns null if not found. */
+export async function getHospitableConnection(connectionId: string): Promise<HospitableConnection | null> {
+  const db = getSupabaseAdmin()
+  if (!db) return null
+  const { data, error } = await db
+    .from('hospitable_connections')
+    .select('connection_id, access_token, refresh_token, token_expires_at')
+    .eq('connection_id', connectionId)
+    .single()
+  if (error || !data) return null
+  return data as HospitableConnection
+}
+
+/** Update Hospitable tokens after a refresh. */
+export async function updateHospitableTokens(
+  connectionId: string,
+  accessToken: string,
+  refreshToken: string,
+  expiresIn: number
+): Promise<boolean> {
+  const db = getSupabaseAdmin()
+  if (!db) return false
+  const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
+  const { error } = await db
+    .from('hospitable_connections')
+    .update({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      token_expires_at: expiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('connection_id', connectionId)
+  if (error) { console.error('[db] updateHospitableTokens:', error); return false }
+  return true
+}

@@ -23,9 +23,11 @@
  */
 
 import type { ListingInput } from '../types'
+import { getHospitableConnection, updateHospitableTokens } from '../supabase'
 
 // ---- Config ----
 const BASE_URL = 'https://public.api.hospitable.com/v2'
+const TOKEN_URL = 'https://auth.hospitable.com/oauth/token'
 const MAX_PER_PAGE = 100
 const REVIEWS_PER_PAGE = 50 // max per SDK docs
 
@@ -36,6 +38,59 @@ export interface FetchOptions {
   propertyId?: string
   /** Fetch and attach reviews per property. Default false — reviews deferred to v2 per Hospitable's guidance. */
   includeReviews?: boolean
+}
+
+// ---- Token refresh ----
+
+/**
+ * Resolve a connection_id to a valid access token.
+ * Refreshes the token if it's expired or about to expire (60s buffer).
+ */
+export async function resolveToken(connectionId: string): Promise<string> {
+  const conn = await getHospitableConnection(connectionId)
+  if (!conn) throw new Error('Hospitable connection not found. Please reconnect.')
+
+  const expiresAt = new Date(conn.token_expires_at).getTime()
+  const now = Date.now()
+
+  // If token is still valid (with 60s buffer), return it
+  if (expiresAt - now > 60_000) {
+    return conn.access_token
+  }
+
+  // Token expired or about to expire — refresh it
+  const clientId = process.env.HOSPITABLE_CLIENT_ID
+  const clientSecret = process.env.HOSPITABLE_CLIENT_SECRET
+  if (!clientId || !clientSecret) {
+    throw new Error('Hospitable OAuth not configured on server')
+  }
+
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: conn.refresh_token,
+    }),
+  })
+
+  if (!res.ok) {
+    const body = await res.text()
+    console.error('[hospitable] Token refresh failed:', res.status, body)
+    throw new Error('Hospitable session expired. Please reconnect.')
+  }
+
+  const tokens = await res.json()
+  await updateHospitableTokens(
+    connectionId,
+    tokens.access_token,
+    tokens.refresh_token ?? conn.refresh_token,
+    tokens.expires_in || 3600
+  )
+
+  return tokens.access_token
 }
 
 // ---- HTTP helper ----
@@ -151,13 +206,36 @@ export function mapPropertyToInput(
     ? property.amenities.map((a: any) => (typeof a === 'string' ? a : a?.name)).filter(Boolean)
     : []
 
-  // BEST-GUESS: picture is a single URL; no photos array in the spec
-  // The actual API may return more via include=details — unknown until tested
-  const mainPicture = property?.picture
-  const photoUrls: string[] = mainPicture ? [mainPicture] : []
+  // Extract photo URLs: try photos array first (include=details may populate this),
+  // then fall back to the single picture field, then listing platform photos
+  const photoUrls: string[] = []
+  if (Array.isArray(property?.photos)) {
+    for (const p of property.photos) {
+      const url = typeof p === 'string' ? p : p?.url ?? p?.original
+      if (url) photoUrls.push(url)
+    }
+  }
+  if (Array.isArray(property?.details?.photos)) {
+    for (const p of property.details.photos) {
+      const url = typeof p === 'string' ? p : p?.url ?? p?.original
+      if (url && !photoUrls.includes(url)) photoUrls.push(url)
+    }
+  }
+  if (photoUrls.length === 0 && property?.picture) {
+    photoUrls.push(property.picture)
+  }
+  // Also check listing photos from connected platforms
+  const listings: any[] = property?.listings ?? []
+  for (const listing of listings) {
+    if (Array.isArray(listing?.photos)) {
+      for (const p of listing.photos) {
+        const url = typeof p === 'string' ? p : p?.url ?? p?.original
+        if (url && !photoUrls.includes(url)) photoUrls.push(url)
+      }
+    }
+  }
 
   // Construct Airbnb URL from listings[] where platform === 'airbnb'
-  const listings: any[] = property?.listings ?? []
   const airbnbListing = listings.find((l: any) => l?.platform === 'airbnb')
   const airbnbUrl = airbnbListing?.platform_id
     ? `https://www.airbnb.com/rooms/${airbnbListing.platform_id}`
@@ -179,7 +257,6 @@ export function mapPropertyToInput(
     // BEST-GUESS: description is the full text, summary is a shorter version
     description: property?.description ?? property?.summary ?? '',
     amenities,
-    // BEST-GUESS: only 1 photo URL from picture field; photoCount unknown
     photoCount: photoUrls.length,
     photoUrls,
     rating: avgRating,
