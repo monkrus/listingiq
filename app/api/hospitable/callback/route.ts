@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { saveHospitableTokens } from '@/app/lib/supabase'
 
 /**
  * Hospitable OAuth callback handler.
  *
  * Flow:
- * 1. User visits /api/hospitable/authorize → redirected to Hospitable login
+ * 1. User visits /api/hospitable/authorize -> redirected to Hospitable login
  * 2. After granting access, Hospitable redirects here with ?code=XXX
  * 3. We exchange the code for an access_token + refresh_token
- * 4. Display the token (for testing) or store it (for production)
+ * 4. Store tokens in Supabase and redirect to /hospitable with connection_id
  */
 
 const TOKEN_URL = 'https://auth.hospitable.com/oauth/token'
@@ -21,11 +22,15 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     const desc = req.nextUrl.searchParams.get('error_description') || error
-    return NextResponse.json({ error: 'Authorization denied', detail: desc }, { status: 400 })
+    const errorUrl = new URL('/hospitable', req.nextUrl.origin)
+    errorUrl.searchParams.set('error', desc)
+    return NextResponse.redirect(errorUrl)
   }
 
   if (!code) {
-    return NextResponse.json({ error: 'Missing authorization code' }, { status: 400 })
+    const errorUrl = new URL('/hospitable', req.nextUrl.origin)
+    errorUrl.searchParams.set('error', 'Missing authorization code')
+    return NextResponse.redirect(errorUrl)
   }
 
   // Exchange code for tokens
@@ -44,21 +49,28 @@ export async function GET(req: NextRequest) {
   if (!tokenRes.ok) {
     const body = await tokenRes.text()
     console.error('[hospitable] Token exchange failed:', tokenRes.status, body)
-    return NextResponse.json(
-      { error: 'Token exchange failed', status: tokenRes.status, detail: body },
-      { status: 502 }
-    )
+    const errorUrl = new URL('/hospitable', req.nextUrl.origin)
+    errorUrl.searchParams.set('error', 'Token exchange failed. Please try again.')
+    return NextResponse.redirect(errorUrl)
   }
 
   const tokens = await tokenRes.json()
 
-  // For now, return the tokens so you can test the adapter.
-  // In production, store these securely (e.g., in Supabase) per user.
-  return NextResponse.json({
-    message: 'Hospitable connected successfully!',
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_in: tokens.expires_in,
-    token_type: tokens.token_type,
-  })
+  // Store tokens in Supabase
+  const connectionId = await saveHospitableTokens(
+    tokens.access_token,
+    tokens.refresh_token,
+    tokens.expires_in || 3600
+  )
+
+  if (!connectionId) {
+    const errorUrl = new URL('/hospitable', req.nextUrl.origin)
+    errorUrl.searchParams.set('error', 'Failed to save connection. Please try again.')
+    return NextResponse.redirect(errorUrl)
+  }
+
+  // Redirect to Hospitable dashboard with connection_id
+  const successUrl = new URL('/hospitable', req.nextUrl.origin)
+  successUrl.searchParams.set('connected', connectionId)
+  return NextResponse.redirect(successUrl)
 }
