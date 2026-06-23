@@ -25,8 +25,8 @@ describe('Security: URL Input Validation', () => {
     expect(isValidAirbnbUrl('data:text/html,<script>alert(1)</script>')).toBe(false)
   })
 
-  it('rejects http: protocol (requires https)', () => {
-    expect(isValidAirbnbUrl('http://www.airbnb.com/rooms/12345')).toBe(false)
+  it('accepts http: protocol (upgraded to https at fetch time)', () => {
+    expect(isValidAirbnbUrl('http://www.airbnb.com/rooms/12345')).toBe(true)
   })
 
   // SSRF attempts
