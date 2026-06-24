@@ -15,6 +15,7 @@ const TOKEN_URL = 'https://auth.hospitable.com/oauth/token'
 const CLIENT_ID = process.env.HOSPITABLE_CLIENT_ID!
 const CLIENT_SECRET = process.env.HOSPITABLE_CLIENT_SECRET!
 const REDIRECT_URI = process.env.HOSPITABLE_REDIRECT_URI || 'https://listingiq.pro/api/hospitable/callback'
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://listingiq.pro'
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code')
@@ -22,13 +23,13 @@ export async function GET(req: NextRequest) {
 
   if (error) {
     const desc = req.nextUrl.searchParams.get('error_description') || error
-    const errorUrl = new URL('/hospitable', req.nextUrl.origin)
+    const errorUrl = new URL('/hospitable', BASE_URL)
     errorUrl.searchParams.set('error', desc)
     return NextResponse.redirect(errorUrl)
   }
 
   if (!code) {
-    const errorUrl = new URL('/hospitable', req.nextUrl.origin)
+    const errorUrl = new URL('/hospitable', BASE_URL)
     errorUrl.searchParams.set('error', 'Missing authorization code')
     return NextResponse.redirect(errorUrl)
   }
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
   if (!tokenRes.ok) {
     const body = await tokenRes.text()
     console.error('[hospitable] Token exchange failed:', tokenRes.status, body)
-    const errorUrl = new URL('/hospitable', req.nextUrl.origin)
+    const errorUrl = new URL('/hospitable', BASE_URL)
     errorUrl.searchParams.set('error', 'Token exchange failed. Please try again.')
     return NextResponse.redirect(errorUrl)
   }
@@ -64,13 +65,13 @@ export async function GET(req: NextRequest) {
   )
 
   if (!connectionId) {
-    const errorUrl = new URL('/hospitable', req.nextUrl.origin)
+    const errorUrl = new URL('/hospitable', BASE_URL)
     errorUrl.searchParams.set('error', 'Failed to save connection. Please try again.')
     return NextResponse.redirect(errorUrl)
   }
 
   // Redirect to Hospitable dashboard with connection_id
-  const successUrl = new URL('/hospitable', req.nextUrl.origin)
+  const successUrl = new URL('/hospitable', BASE_URL)
   successUrl.searchParams.set('connected', connectionId)
   return NextResponse.redirect(successUrl)
 }
