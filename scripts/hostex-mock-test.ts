@@ -296,7 +296,7 @@ async function main() {
     console.log(`Persona Score: ${report.personaScore}`)
     console.log(`Review Score: ${report.reviewScore}`)
     console.log('\nPriority Actions:')
-    for (const action of report.priorityActions) {
+    for (const action of (report as any).priorityActions) {
       console.log(`  - ${action}`)
     }
     console.log('\nFull report:')
