@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getHostexConnection } from '@/app/lib/supabase'
 import { fetchHostexListingInputs } from '@/app/lib/integrations/hostex-adapter'
 import { analyzeListingInput, AnalysisError } from '@/app/lib/analyze-core'
 
 export async function POST(req: NextRequest) {
-  const { accessToken, plan, listingId } = await req.json()
+  const { connectionId, accessToken: rawToken, plan, listingId } = await req.json()
 
-  if (!accessToken) {
-    return NextResponse.json({ error: 'Missing Hostex access token' }, { status: 400 })
+  // Support both connectionId (production) and raw token (testing)
+  let accessToken: string
+  if (connectionId) {
+    const token = await getHostexConnection(connectionId)
+    if (!token) {
+      return NextResponse.json({ error: 'Connection not found. Please reconnect.' }, { status: 401 })
+    }
+    accessToken = token
+  } else if (rawToken) {
+    accessToken = rawToken
+  } else {
+    return NextResponse.json({ error: 'Missing connectionId or accessToken' }, { status: 400 })
   }
 
   const effectivePlan = plan || 'quick-score'
@@ -50,6 +61,13 @@ export async function POST(req: NextRequest) {
         listingId: id,
         readiness: readiness.mode,
         report,
+        photoUrls: input.photoUrls,
+        listing: {
+          title: input.title,
+          location: input.location,
+          photoCount: input.photoCount,
+          amenities: input.amenities?.slice(0, 5),
+        },
       })
     } catch (err) {
       if (err instanceof AnalysisError) {

@@ -311,3 +311,43 @@ export async function updateHospitableTokens(
   if (error) { console.error('[db] updateHospitableTokens:', error); return false }
   return true
 }
+
+// ---- Hostex API token storage ----
+
+/** Save a Hostex API token; returns the connection_id (UUID). */
+export async function saveHostexToken(accessToken: string): Promise<string | null> {
+  const db = getSupabaseAdmin()
+  if (!db) { console.warn('[db] Supabase not configured, skipping saveHostexToken'); return null }
+  const { data, error } = await db
+    .from('hostex_connections')
+    .insert({ access_token: accessToken })
+    .select('connection_id')
+    .single()
+  if (error) { console.error('[db] saveHostexToken:', error); return null }
+  return data.connection_id
+}
+
+/** Get Hostex connection by ID. Returns the access token or null. */
+export async function getHostexConnection(connectionId: string): Promise<string | null> {
+  const db = getSupabaseAdmin()
+  if (!db) return null
+  const { data, error } = await db
+    .from('hostex_connections')
+    .select('access_token')
+    .eq('connection_id', connectionId)
+    .single()
+  if (error || !data) return null
+  return data.access_token
+}
+
+/** Delete a Hostex connection (disconnect). */
+export async function deleteHostexConnection(connectionId: string): Promise<boolean> {
+  const db = getSupabaseAdmin()
+  if (!db) return false
+  const { error } = await db
+    .from('hostex_connections')
+    .delete()
+    .eq('connection_id', connectionId)
+  if (error) { console.error('[db] deleteHostexConnection:', error); return false }
+  return true
+}
