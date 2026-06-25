@@ -335,7 +335,7 @@ export default function HospitablePage() {
               </div>
 
               <p className="text-xs text-stone-400 text-center mt-4">
-                Analysis is free during the Hospitable beta.
+                Quick Score $29 · Full Audit $49 · per property
               </p>
             </div>
           )}
@@ -348,7 +348,7 @@ export default function HospitablePage() {
                 Analyzing {analyzingTitle}
               </p>
               <p className="text-xs text-stone-500">
-                This typically takes 30-60 seconds...
+                This typically takes about 3 minutes...
               </p>
             </div>
           )}
