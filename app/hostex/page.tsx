@@ -4,6 +4,14 @@ import Logo from '../components/Logo'
 import Report from '../components/Report'
 import { ReportData } from '../lib/types'
 import { PhotoAnalysisResult } from '../api/analyze-photos/route'
+import PmsApplyBar from '../components/PmsApplyBar'
+import PmsEmailCapture from '../components/PmsEmailCapture'
+
+interface WebhookNotification {
+  propertyId: string
+  event: string
+  updatedAt: string
+}
 
 interface Property {
   id: string
@@ -43,6 +51,10 @@ export default function HostexPage() {
   const [analyzingTitle, setAnalyzingTitle] = useState('')
   const [savedReports, setSavedReports] = useState<SavedReport[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [updatedPropertyIds, setUpdatedPropertyIds] = useState<Set<string>>(new Set())
+  const [lastReportId, setLastReportId] = useState<string | null>(null)
+  const [emailSending, setEmailSending] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
 
   // On mount: check URL params for session_id (return from Stripe) or existing connection
   useEffect(() => {
@@ -106,12 +118,24 @@ export default function HostexPage() {
     } catch { /* non-critical */ }
   }, [])
 
+  // Fetch webhook notifications
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch('/api/integrations/notifications?platform=hostex')
+      const data = await res.json()
+      if (res.ok && data.updatedProperties) {
+        setUpdatedPropertyIds(new Set(data.updatedProperties.map((u: WebhookNotification) => u.propertyId)))
+      }
+    } catch { /* non-critical */ }
+  }, [])
+
   useEffect(() => {
     if (connectionId) {
       fetchProperties(connectionId)
       fetchReports(connectionId)
+      fetchNotifications()
     }
-  }, [connectionId, fetchProperties, fetchReports])
+  }, [connectionId, fetchProperties, fetchReports, fetchNotifications])
 
   async function handleConnect() {
     const token = tokenInput.trim()
@@ -235,10 +259,27 @@ export default function HostexPage() {
     }
   }
 
-  function viewSavedReport(report: SavedReport) {
-    setReport(report.report_data as ReportData)
+  function viewSavedReport(sr: SavedReport) {
+    setReport(sr.report_data as ReportData)
     setPhotoResults(null)
+    setLastReportId(sr.id)
+    setEmailSent(false)
     setStep('report')
+  }
+
+  async function handleEmailReport() {
+    const savedEmail = localStorage.getItem('pms_email_hostex')
+    if (!savedEmail || !lastReportId) return
+    setEmailSending(true)
+    try {
+      const res = await fetch('/api/integrations/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId: lastReportId, email: savedEmail }),
+      })
+      if (res.ok) setEmailSent(true)
+    } catch { /* non-critical */ }
+    setEmailSending(false)
   }
 
   function disconnect() {
@@ -268,6 +309,7 @@ export default function HostexPage() {
 
   // Report view
   if (step === 'report' && report) {
+    const savedEmail = typeof window !== 'undefined' ? localStorage.getItem('pms_email_hostex') : null
     return (
       <main className="min-h-screen py-12" style={{ background: '#F7F6F3' }}>
         <div className="max-w-2xl mx-auto px-4 mb-6 text-center">
@@ -292,6 +334,44 @@ export default function HostexPage() {
           onUpgrade={() => {}}
           photoError={false}
         />
+        {/* Apply optimizations to PMS */}
+        {connectionId && selectedId && (
+          <div className="max-w-2xl mx-auto px-4">
+            <PmsApplyBar
+              platform="hostex"
+              connectionId={connectionId}
+              propertyId={selectedId}
+              reportData={report}
+              photoResults={photoResults}
+            />
+          </div>
+        )}
+        {/* Email report to self */}
+        {lastReportId && (
+          <div className="max-w-2xl mx-auto px-4">
+            <div className="bg-white border border-stone-200 rounded-2xl p-5 mb-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-stone-600">Email this report to yourself</p>
+                {savedEmail ? (
+                  emailSent ? (
+                    <span className="text-xs text-green-600 font-medium">Sent to {savedEmail}</span>
+                  ) : (
+                    <button
+                      onClick={handleEmailReport}
+                      disabled={emailSending}
+                      style={{ fontFamily: 'var(--font-syne)' }}
+                      className="px-4 py-2 bg-stone-900 text-white text-xs font-bold rounded-lg hover:bg-stone-700 transition-colors disabled:opacity-50"
+                    >
+                      {emailSending ? 'Sending...' : `Send to ${savedEmail}`}
+                    </button>
+                  )
+                ) : (
+                  <span className="text-xs text-stone-400">Save your email below first</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     )
   }
@@ -458,6 +538,11 @@ export default function HostexPage() {
                 </div>
               )}
 
+              {/* Email capture for report recovery */}
+              {connectionId && (
+                <PmsEmailCapture platform="hostex" connectionId={connectionId} />
+              )}
+
               {properties.length === 0 && (
                 <p className="text-sm text-stone-500 text-center py-4">
                   No Airbnb listings found in your Hostex account.
@@ -496,6 +581,11 @@ export default function HostexPage() {
                             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${badge.color}`}>
                               {badge.text}
                             </span>
+                            {updatedPropertyIds.has(prop.id) && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border text-blue-600 bg-blue-50 border-blue-200">
+                                Updated
+                              </span>
+                            )}
                             <span className="text-[10px] text-stone-400">
                               {prop.photoCount} photos &middot; {prop.amenityCount} amenities
                             </span>

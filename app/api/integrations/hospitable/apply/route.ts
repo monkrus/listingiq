@@ -7,9 +7,9 @@ const BASE_URL = 'https://public.api.hospitable.com/v2'
 
 /**
  * POST /api/integrations/hospitable/apply
- * Body: { connectionId, propertyId, title?, description? }
+ * Body: { connectionId, propertyId, title?, description?, photoOrder?: string[] }
  *
- * Pushes optimized title/description back to Hospitable.
+ * Pushes optimized title/description/photo order back to Hospitable.
  * Only writes fields that are provided.
  */
 export async function POST(req: NextRequest) {
@@ -19,14 +19,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
-  const { connectionId, propertyId, title, description } = await req.json()
+  const { connectionId, propertyId, title, description, photoOrder } = await req.json()
 
   if (!connectionId || !propertyId) {
     return NextResponse.json({ error: 'Missing connectionId or propertyId' }, { status: 400 })
   }
 
-  if (!title && !description) {
-    return NextResponse.json({ error: 'Nothing to update — provide title or description' }, { status: 400 })
+  if (!title && !description && !photoOrder) {
+    return NextResponse.json({ error: 'Nothing to update — provide title, description, or photoOrder' }, { status: 400 })
   }
 
   let token: string
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
   const updateBody: Record<string, unknown> = {}
   if (title) updateBody.public_name = title
   if (description) updateBody.description = description
+  if (Array.isArray(photoOrder) && photoOrder.length > 0) updateBody.photos = photoOrder
 
   try {
     const res = await fetch(`${BASE_URL}/properties/${propertyId}`, {

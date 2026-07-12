@@ -19,14 +19,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
-  const { connectionId, listingId, title, description } = await req.json()
+  const { connectionId, listingId, title, description, photoOrder } = await req.json()
 
   if (!connectionId || !listingId) {
     return NextResponse.json({ error: 'Missing connectionId or listingId' }, { status: 400 })
   }
 
-  if (!title && !description) {
-    return NextResponse.json({ error: 'Nothing to update — provide title or description' }, { status: 400 })
+  if (!title && !description && !photoOrder) {
+    return NextResponse.json({ error: 'Nothing to update — provide title, description, or photoOrder' }, { status: 400 })
   }
 
   const accessToken = await getHostexConnection(connectionId)
@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
   const updateBody: Record<string, unknown> = {}
   if (title) updateBody.title = title
   if (description) updateBody.description = description
+  if (Array.isArray(photoOrder) && photoOrder.length > 0) updateBody.photos = photoOrder
 
   try {
     const res = await fetch(`${HOSTEX_BASE}/listings/${listingId}`, {

@@ -195,34 +195,41 @@ export function mapPropertyToInput(
   property: any,
   reviews: { comments: string[]; ratings: number[] }
 ): ListingInput {
-  // BEST-GUESS: address is { city, state, country, display }
-  const addr = property?.address ?? {}
+  // Address: try multiple known shapes — { display }, { formatted }, { city, state, country },
+  // or nested under details.address. Hospitable API may vary by account/version.
+  const addr = property?.address ?? property?.details?.address ?? {}
   const location =
     addr.display ??
-    ([addr.city, addr.state, addr.country].filter(Boolean).join(', ') || undefined)
+    addr.formatted ??
+    addr.full_address ??
+    ([addr.city, addr.state ?? addr.region, addr.country].filter(Boolean).join(', ') || undefined)
 
-  // BEST-GUESS: amenities is string[] directly on the property
-  const amenities: string[] = Array.isArray(property?.amenities)
-    ? property.amenities.map((a: any) => (typeof a === 'string' ? a : a?.name)).filter(Boolean)
+  // Amenities: may be string[], object[] with { name }, or nested under details
+  const rawAmenities = property?.amenities ?? property?.details?.amenities ?? []
+  const amenities: string[] = Array.isArray(rawAmenities)
+    ? rawAmenities.map((a: any) => (typeof a === 'string' ? a : a?.name ?? a?.label)).filter(Boolean)
     : []
 
-  // Extract photo URLs: try photos array first (include=details may populate this),
-  // then fall back to the single picture field, then listing platform photos
+  // Extract photo URLs: try multiple field names across API versions
   const photoUrls: string[] = []
-  if (Array.isArray(property?.photos)) {
-    for (const p of property.photos) {
-      const url = typeof p === 'string' ? p : p?.url ?? p?.original
-      if (url) photoUrls.push(url)
+  const photoSources = [
+    property?.photos,
+    property?.images,
+    property?.details?.photos,
+    property?.details?.images,
+  ]
+  for (const source of photoSources) {
+    if (Array.isArray(source)) {
+      for (const p of source) {
+        const url = typeof p === 'string' ? p : p?.url ?? p?.original ?? p?.src ?? p?.thumbnail
+        if (url && !photoUrls.includes(url)) photoUrls.push(url)
+      }
     }
   }
-  if (Array.isArray(property?.details?.photos)) {
-    for (const p of property.details.photos) {
-      const url = typeof p === 'string' ? p : p?.url ?? p?.original
-      if (url && !photoUrls.includes(url)) photoUrls.push(url)
-    }
-  }
-  if (photoUrls.length === 0 && property?.picture) {
-    photoUrls.push(property.picture)
+  // Fallback: single picture/thumbnail field
+  if (photoUrls.length === 0) {
+    const singlePhoto = property?.picture ?? property?.thumbnail ?? property?.image_url
+    if (singlePhoto) photoUrls.push(singlePhoto)
   }
   // Also check listing photos from connected platforms
   const listings: any[] = property?.listings ?? []
@@ -251,11 +258,11 @@ export function mapPropertyToInput(
       : undefined
 
   return {
-    // BEST-GUESS: public_name is the guest-facing title, name is internal
-    title: property?.public_name ?? property?.name ?? '',
+    // Title: try guest-facing names first, then internal name
+    title: property?.public_name ?? property?.title ?? property?.name ?? property?.details?.name ?? '',
     location,
-    // BEST-GUESS: description is the full text, summary is a shorter version
-    description: property?.description ?? property?.summary ?? '',
+    // Description: try full text, then summary, then details.description
+    description: property?.description ?? property?.details?.description ?? property?.summary ?? '',
     amenities,
     photoCount: photoUrls.length,
     photoUrls,
