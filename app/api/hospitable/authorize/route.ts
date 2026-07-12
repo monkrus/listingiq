@@ -17,7 +17,7 @@ export async function GET() {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
-    scope: 'properties:read reviews:read',
+    scope: 'properties:read properties:write reviews:read',
   })
 
   return NextResponse.redirect(`${AUTH_URL}?${params.toString()}`)

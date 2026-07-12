@@ -16,7 +16,17 @@ interface Property {
   missing: string[]
 }
 
-type Step = 'connect' | 'properties' | 'analyzing' | 'report'
+interface SavedReport {
+  id: string
+  property_id: string
+  plan: string
+  report_data: ReportData
+  overall_score: number
+  created_at: string
+  listing_data: { title?: string }
+}
+
+type Step = 'connect' | 'properties' | 'plan-select' | 'analyzing' | 'report'
 
 export default function HostexPage() {
   const [step, setStep] = useState<Step>('connect')
@@ -27,12 +37,32 @@ export default function HostexPage() {
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedPlan, setSelectedPlan] = useState<'quick-score' | 'full-audit'>('quick-score')
   const [report, setReport] = useState<ReportData | null>(null)
   const [photoResults, setPhotoResults] = useState<PhotoAnalysisResult | null>(null)
   const [analyzingTitle, setAnalyzingTitle] = useState('')
+  const [savedReports, setSavedReports] = useState<SavedReport[]>([])
+  const [showHistory, setShowHistory] = useState(false)
 
-  // On mount: check for existing connection
+  // On mount: check URL params for session_id (return from Stripe) or existing connection
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+
+    // Return from Stripe payment
+    const sessionId = params.get('session_id')
+    const propertyId = params.get('propertyId')
+    const plan = params.get('plan')
+    if (sessionId && propertyId) {
+      const saved = localStorage.getItem('hostex_connection_id')
+      if (saved) {
+        setConnectionId(saved)
+        window.history.replaceState({}, '', '/hostex')
+        runAnalysis(saved, propertyId, sessionId, plan || 'quick-score')
+      }
+      return
+    }
+
+    // Existing connection from localStorage
     const saved = localStorage.getItem('hostex_connection_id')
     if (saved) {
       setConnectionId(saved)
@@ -65,11 +95,23 @@ export default function HostexPage() {
     }
   }, [])
 
+  // Fetch saved reports for this connection
+  const fetchReports = useCallback(async (connId: string) => {
+    try {
+      const res = await fetch(`/api/integrations/reports?connectionId=${encodeURIComponent(connId)}&platform=hostex`)
+      const data = await res.json()
+      if (res.ok && data.reports) {
+        setSavedReports(data.reports)
+      }
+    } catch { /* non-critical */ }
+  }, [])
+
   useEffect(() => {
     if (connectionId) {
       fetchProperties(connectionId)
+      fetchReports(connectionId)
     }
-  }, [connectionId, fetchProperties])
+  }, [connectionId, fetchProperties, fetchReports])
 
   async function handleConnect() {
     const token = tokenInput.trim()
@@ -99,7 +141,7 @@ export default function HostexPage() {
     }
   }
 
-  async function analyzeProperty(listingId: string) {
+  async function runAnalysis(connId: string, listingId: string, sessionId: string, plan: string) {
     const prop = properties.find(p => p.id === listingId)
     setSelectedId(listingId)
     setAnalyzingTitle(prop?.title || 'Listing')
@@ -112,9 +154,10 @@ export default function HostexPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          connectionId,
+          connectionId: connId,
           listingId,
-          plan: 'quick-score',
+          plan,
+          sessionId,
         }),
       })
       const data = await res.json()
@@ -127,8 +170,8 @@ export default function HostexPage() {
 
       setReport(result.report as ReportData)
 
-      // Run photo analysis if listing has photo URLs
-      if (result.photoUrls?.length) {
+      // Run photo analysis if listing has photo URLs and plan is full-audit
+      if (result.photoUrls?.length && plan === 'full-audit') {
         try {
           const photoRes = await fetch('/api/analyze-photos', {
             method: 'POST',
@@ -152,10 +195,50 @@ export default function HostexPage() {
       }
 
       setStep('report')
+      fetchReports(connId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
       setStep('properties')
     }
+  }
+
+  function handleAnalyzeClick(listingId: string) {
+    setSelectedId(listingId)
+    setStep('plan-select')
+  }
+
+  async function handlePlanSelected(plan: 'quick-score' | 'full-audit') {
+    setSelectedPlan(plan)
+
+    if (!connectionId || !selectedId) return
+
+    // Create Stripe checkout session
+    try {
+      const res = await fetch('/api/integrations/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan,
+          platform: 'hostex',
+          connectionId,
+          propertyId: selectedId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Checkout failed')
+
+      // Redirect to Stripe
+      window.location.href = data.url
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Checkout failed')
+      setStep('properties')
+    }
+  }
+
+  function viewSavedReport(report: SavedReport) {
+    setReport(report.report_data as ReportData)
+    setPhotoResults(null)
+    setStep('report')
   }
 
   function disconnect() {
@@ -164,6 +247,7 @@ export default function HostexPage() {
     setProperties([])
     setReport(null)
     setPhotoResults(null)
+    setSavedReports([])
     setStep('connect')
     setError('')
     setTokenInput('')
@@ -280,6 +364,50 @@ export default function HostexPage() {
             </div>
           )}
 
+          {/* Plan selection */}
+          {step === 'plan-select' && (
+            <div className="py-4">
+              <p style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-900 mb-4 text-center">
+                Choose your analysis plan
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={() => handlePlanSelected('quick-score')}
+                  className="w-full border border-stone-200 rounded-xl p-4 hover:border-stone-400 transition-colors text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-stone-900">Quick Score</p>
+                      <p className="text-xs text-stone-500 mt-0.5">Title, description, amenities, SEO, action plan</p>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-syne)' }} className="text-lg font-bold text-stone-900">$29</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handlePlanSelected('full-audit')}
+                  className="w-full border-2 border-stone-900 rounded-xl p-4 hover:bg-stone-50 transition-colors text-left relative"
+                >
+                  <span className="absolute -top-2.5 right-3 bg-stone-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    POPULAR
+                  </span>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-stone-900">Full Audit</p>
+                      <p className="text-xs text-stone-500 mt-0.5">Everything above + AI photo analysis with gallery reorder</p>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-syne)' }} className="text-lg font-bold text-stone-900">$49</span>
+                  </div>
+                </button>
+              </div>
+              <button
+                onClick={() => setStep('properties')}
+                className="w-full mt-4 text-xs text-stone-400 hover:text-stone-600 underline text-center"
+              >
+                Back to listings
+              </button>
+            </div>
+          )}
+
           {/* Listings list */}
           {step === 'properties' && !loading && (
             <div>
@@ -287,13 +415,48 @@ export default function HostexPage() {
                 <p style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-900">
                   Your Listings ({properties.length})
                 </p>
-                <button
-                  onClick={disconnect}
-                  className="text-xs text-stone-400 hover:text-red-500 underline"
-                >
-                  Disconnect
-                </button>
+                <div className="flex items-center gap-3">
+                  {savedReports.length > 0 && (
+                    <button
+                      onClick={() => setShowHistory(!showHistory)}
+                      className="text-xs text-stone-500 hover:text-stone-700 underline"
+                    >
+                      {showHistory ? 'Hide history' : `History (${savedReports.length})`}
+                    </button>
+                  )}
+                  <button
+                    onClick={disconnect}
+                    className="text-xs text-stone-400 hover:text-red-500 underline"
+                  >
+                    Disconnect
+                  </button>
+                </div>
               </div>
+
+              {/* Report history */}
+              {showHistory && savedReports.length > 0 && (
+                <div className="mb-4 border border-stone-100 rounded-xl p-3 bg-stone-50">
+                  <p className="text-xs font-medium text-stone-600 mb-2">Previous Reports</p>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {savedReports.map(r => (
+                      <button
+                        key={r.id}
+                        onClick={() => viewSavedReport(r)}
+                        className="w-full text-left px-3 py-2 bg-white rounded-lg border border-stone-200 hover:border-stone-300 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-stone-700 truncate">
+                            {r.listing_data?.title || 'Untitled'}
+                          </span>
+                          <span className="text-[10px] text-stone-400 ml-2 flex-shrink-0">
+                            Score: {r.overall_score} &middot; {new Date(r.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {properties.length === 0 && (
                 <p className="text-sm text-stone-500 text-center py-4">
@@ -339,7 +502,7 @@ export default function HostexPage() {
                           </div>
                         </div>
                         <button
-                          onClick={() => analyzeProperty(prop.id)}
+                          onClick={() => handleAnalyzeClick(prop.id)}
                           disabled={!canAnalyze}
                           style={{ fontFamily: 'var(--font-syne)' }}
                           className={`self-center px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${
@@ -360,10 +523,6 @@ export default function HostexPage() {
                   )
                 })}
               </div>
-
-              <p className="text-xs text-stone-400 text-center mt-4">
-                Analysis is free during the Hostex beta.
-              </p>
             </div>
           )}
 
