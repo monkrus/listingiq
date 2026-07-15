@@ -3,19 +3,22 @@ import { getHostexConnection } from '@/app/lib/supabase'
 import { fetchHostexListingInputs } from '@/app/lib/integrations/hostex-adapter'
 
 /**
- * GET /api/integrations/hostex/properties?connectionId=xxx
+ * GET /api/integrations/hostex/properties
  *
  * Returns a list of Hostex listings with basic info for the property picker.
+ * Reads connectionId from httpOnly cookie.
  */
 export async function GET(req: NextRequest) {
-  const connectionId = req.nextUrl.searchParams.get('connectionId')
+  const connectionId = req.cookies.get('hostex_connection_id')?.value
   if (!connectionId) {
-    return NextResponse.json({ error: 'Missing connectionId' }, { status: 400 })
+    return NextResponse.json({ error: 'Not connected. Please connect your Hostex account.' }, { status: 401 })
   }
 
   const accessToken = await getHostexConnection(connectionId)
   if (!accessToken) {
-    return NextResponse.json({ error: 'Connection not found. Please reconnect.' }, { status: 401 })
+    const response = NextResponse.json({ error: 'Connection not found. Please reconnect.' }, { status: 401 })
+    response.cookies.delete('hostex_connection_id')
+    return response
   }
 
   try {

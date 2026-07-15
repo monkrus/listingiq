@@ -19,10 +19,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
-  const { connectionId, propertyId, title, description, photoOrder } = await req.json()
+  const connectionId = req.cookies.get('hospitable_connection_id')?.value
+  const { propertyId, title, description, photoOrder } = await req.json()
 
-  if (!connectionId || !propertyId) {
-    return NextResponse.json({ error: 'Missing connectionId or propertyId' }, { status: 400 })
+  if (!connectionId) {
+    return NextResponse.json({ error: 'Not connected. Please connect your Hospitable account.' }, { status: 401 })
+  }
+
+  if (!propertyId) {
+    return NextResponse.json({ error: 'Missing propertyId' }, { status: 400 })
   }
 
   if (!title && !description && !photoOrder) {

@@ -19,10 +19,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
-  const { connectionId, listingId, title, description, photoOrder } = await req.json()
+  const connectionId = req.cookies.get('hostex_connection_id')?.value
+  const { listingId, title, description, photoOrder } = await req.json()
 
-  if (!connectionId || !listingId) {
-    return NextResponse.json({ error: 'Missing connectionId or listingId' }, { status: 400 })
+  if (!connectionId) {
+    return NextResponse.json({ error: 'Not connected. Please connect your Hostex account.' }, { status: 401 })
+  }
+
+  if (!listingId) {
+    return NextResponse.json({ error: 'Missing listingId' }, { status: 400 })
   }
 
   if (!title && !description && !photoOrder) {

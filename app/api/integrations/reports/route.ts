@@ -24,12 +24,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ report })
   }
 
-  const connectionId = req.nextUrl.searchParams.get('connectionId')
+  const platform = req.nextUrl.searchParams.get('platform') || undefined
+  const connectionId = platform === 'hospitable'
+    ? req.cookies.get('hospitable_connection_id')?.value
+    : platform === 'hostex'
+      ? req.cookies.get('hostex_connection_id')?.value
+      : undefined
+
   if (!connectionId) {
-    return NextResponse.json({ error: 'Missing connectionId or reportId' }, { status: 400 })
+    return NextResponse.json({ error: 'Not connected' }, { status: 401 })
   }
 
-  const platform = req.nextUrl.searchParams.get('platform') || undefined
   const reports = await getPmsReports(connectionId, platform)
 
   return NextResponse.json({ reports })

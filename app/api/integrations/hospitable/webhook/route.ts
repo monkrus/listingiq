@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { logger } from '@/app/lib/logger'
 import { getSupabaseAdmin } from '@/app/lib/supabase'
 
@@ -8,37 +9,56 @@ import { getSupabaseAdmin } from '@/app/lib/supabase'
  * Receives webhook events from Hospitable when properties are updated.
  * Events: property.updated, property.created, property.deleted
  *
- * Setup: Configure this URL in Hospitable's webhook settings.
- * Security: Validates the X-Hospitable-Signature header.
+ * Security:
+ * - Validates HMAC SHA-256 signature via x-hospitable-signature header
+ * - Uses crypto.timingSafeEqual to prevent timing attacks
+ * - Fails closed: returns 503 if HOSPITABLE_WEBHOOK_SECRET is unset
  */
 export async function POST(req: NextRequest) {
-  const signature = req.headers.get('x-hospitable-signature')
   const webhookSecret = process.env.HOSPITABLE_WEBHOOK_SECRET
 
-  // Verify signature if secret is configured
-  if (webhookSecret && webhookSecret !== 'not-configured') {
-    if (!signature) {
-      logger.warn('hospitable', 'webhook_no_signature')
-      return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
-    }
+  // Fail closed: if no webhook secret is configured, refuse all webhooks
+  if (!webhookSecret) {
+    logger.error('hospitable', 'webhook_secret_missing', {
+      message: 'HOSPITABLE_WEBHOOK_SECRET is not set. Refusing unsigned webhooks.',
+    })
+    return NextResponse.json(
+      { error: 'Webhook verification not configured' },
+      { status: 503 }
+    )
+  }
 
-    // HMAC verification — Hospitable uses SHA-256
-    const crypto = await import('crypto')
-    const body = await req.clone().text()
-    const expected = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(body)
-      .digest('hex')
+  const signature = req.headers.get('x-hospitable-signature')
+  const body = await req.text()
 
-    if (signature !== expected && signature !== `sha256=${expected}`) {
-      logger.warn('hospitable', 'webhook_invalid_signature')
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-    }
+  if (!signature) {
+    logger.warn('hospitable', 'webhook_no_signature')
+    return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
+  }
+
+  // Compute expected HMAC SHA-256
+  const expected = crypto
+    .createHmac('sha256', webhookSecret)
+    .update(body)
+    .digest('hex')
+
+  // Accept both raw hex and "sha256=hex" formats
+  const providedHex = signature.startsWith('sha256=')
+    ? signature.slice(7)
+    : signature
+
+  // Timing-safe comparison
+  const expectedBuf = Buffer.from(expected, 'hex')
+  const providedBuf = Buffer.from(providedHex, 'hex')
+
+  if (expectedBuf.length !== providedBuf.length || !crypto.timingSafeEqual(expectedBuf, providedBuf)) {
+    logger.warn('hospitable', 'webhook_invalid_signature')
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
   let payload: any
   try {
-    payload = await req.json()
+    payload = JSON.parse(body)
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
@@ -51,7 +71,6 @@ export async function POST(req: NextRequest) {
   switch (event) {
     case 'property.updated':
     case 'property.created': {
-      // Store a notification that this property has new data available
       const db = getSupabaseAdmin()
       if (db) {
         await db.from('pms_webhooks').insert({

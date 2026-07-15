@@ -7,7 +7,7 @@ import { fetchHostexListingInputs } from '@/app/lib/integrations/hostex-adapter'
  * Body: { accessToken: "xxx" }
  *
  * Validates the token by fetching listings, then stores it in Supabase.
- * Returns a connection_id for future API calls.
+ * Sets connectionId in an httpOnly cookie.
  */
 export async function POST(req: NextRequest) {
   const { accessToken } = await req.json()
@@ -32,5 +32,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to save connection. Please try again.' }, { status: 500 })
   }
 
-  return NextResponse.json({ connectionId })
+  const response = NextResponse.json({ connected: true })
+
+  // Set connectionId as httpOnly cookie
+  response.cookies.set('hostex_connection_id', connectionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 30, // 30 days
+  })
+
+  return response
 }

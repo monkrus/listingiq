@@ -38,7 +38,7 @@ type Step = 'connect' | 'properties' | 'plan-select' | 'analyzing' | 'report'
 
 export default function HostexPage() {
   const [step, setStep] = useState<Step>('connect')
-  const [connectionId, setConnectionId] = useState<string | null>(null)
+  const [connected, setConnected] = useState(false)
   const [tokenInput, setTokenInput] = useState('')
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(false)
@@ -56,7 +56,7 @@ export default function HostexPage() {
   const [emailSending, setEmailSending] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
 
-  // On mount: check URL params for session_id (return from Stripe) or existing connection
+  // On mount: check URL params for session_id (return from Stripe)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
 
@@ -65,35 +65,31 @@ export default function HostexPage() {
     const propertyId = params.get('propertyId')
     const plan = params.get('plan')
     if (sessionId && propertyId) {
-      const saved = localStorage.getItem('hostex_connection_id')
-      if (saved) {
-        setConnectionId(saved)
-        window.history.replaceState({}, '', '/hostex')
-        runAnalysis(saved, propertyId, sessionId, plan || 'quick-score')
-      }
+      setConnected(true)
+      window.history.replaceState({}, '', '/hostex')
+      runAnalysis(propertyId, sessionId, plan || 'quick-score')
       return
     }
 
-    // Existing connection from localStorage
-    const saved = localStorage.getItem('hostex_connection_id')
-    if (saved) {
-      setConnectionId(saved)
-    }
+    // Try loading properties — if cookie exists, server will accept
+    setConnected(true) // Optimistic; fetchProperties will reset if 401
   }, [])
 
-  // Fetch properties when we have a connection
-  const fetchProperties = useCallback(async (connId: string) => {
+  // Fetch properties (server reads connectionId from httpOnly cookie)
+  const fetchProperties = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/integrations/hostex/properties?connectionId=${encodeURIComponent(connId)}`)
+      const res = await fetch('/api/integrations/hostex/properties')
       const data = await res.json()
       if (!res.ok) {
         if (res.status === 401) {
-          localStorage.removeItem('hostex_connection_id')
-          setConnectionId(null)
+          setConnected(false)
           setStep('connect')
-          setError('Your Hostex connection is no longer valid. Please reconnect.')
+          // Don't show error on initial load with no cookie
+          if (data.error && !data.error.includes('Not connected')) {
+            setError(data.error)
+          }
           return
         }
         throw new Error(data.error || 'Failed to load listings')
@@ -107,10 +103,10 @@ export default function HostexPage() {
     }
   }, [])
 
-  // Fetch saved reports for this connection
-  const fetchReports = useCallback(async (connId: string) => {
+  // Fetch saved reports
+  const fetchReports = useCallback(async () => {
     try {
-      const res = await fetch(`/api/integrations/reports?connectionId=${encodeURIComponent(connId)}&platform=hostex`)
+      const res = await fetch('/api/integrations/reports?platform=hostex')
       const data = await res.json()
       if (res.ok && data.reports) {
         setSavedReports(data.reports)
@@ -130,12 +126,12 @@ export default function HostexPage() {
   }, [])
 
   useEffect(() => {
-    if (connectionId) {
-      fetchProperties(connectionId)
-      fetchReports(connectionId)
+    if (connected) {
+      fetchProperties()
+      fetchReports()
       fetchNotifications()
     }
-  }, [connectionId, fetchProperties, fetchReports, fetchNotifications])
+  }, [connected, fetchProperties, fetchReports, fetchNotifications])
 
   async function handleConnect() {
     const token = tokenInput.trim()
@@ -155,8 +151,8 @@ export default function HostexPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Connection failed')
 
-      localStorage.setItem('hostex_connection_id', data.connectionId)
-      setConnectionId(data.connectionId)
+      // Cookie is set by the server — just update UI state
+      setConnected(true)
       setTokenInput('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed')
@@ -165,7 +161,7 @@ export default function HostexPage() {
     }
   }
 
-  async function runAnalysis(connId: string, listingId: string, sessionId: string, plan: string) {
+  async function runAnalysis(listingId: string, sessionId: string, plan: string) {
     const prop = properties.find(p => p.id === listingId)
     setSelectedId(listingId)
     setAnalyzingTitle(prop?.title || 'Listing')
@@ -178,7 +174,6 @@ export default function HostexPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          connectionId: connId,
           listingId,
           plan,
           sessionId,
@@ -219,7 +214,7 @@ export default function HostexPage() {
       }
 
       setStep('report')
-      fetchReports(connId)
+      fetchReports()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
       setStep('properties')
@@ -234,7 +229,7 @@ export default function HostexPage() {
   async function handlePlanSelected(plan: 'quick-score' | 'full-audit') {
     setSelectedPlan(plan)
 
-    if (!connectionId || !selectedId) return
+    if (!selectedId) return
 
     // Create Stripe checkout session
     try {
@@ -244,7 +239,6 @@ export default function HostexPage() {
         body: JSON.stringify({
           plan,
           platform: 'hostex',
-          connectionId,
           propertyId: selectedId,
         }),
       })
@@ -282,9 +276,9 @@ export default function HostexPage() {
     setEmailSending(false)
   }
 
-  function disconnect() {
-    localStorage.removeItem('hostex_connection_id')
-    setConnectionId(null)
+  async function disconnect() {
+    await fetch('/api/integrations/hostex/disconnect', { method: 'POST' })
+    setConnected(false)
     setProperties([])
     setReport(null)
     setPhotoResults(null)
@@ -335,11 +329,10 @@ export default function HostexPage() {
           photoError={false}
         />
         {/* Apply optimizations to PMS */}
-        {connectionId && selectedId && (
+        {selectedId && (
           <div className="max-w-2xl mx-auto px-4">
             <PmsApplyBar
               platform="hostex"
-              connectionId={connectionId}
               propertyId={selectedId}
               reportData={report}
               photoResults={photoResults}
@@ -539,9 +532,7 @@ export default function HostexPage() {
               )}
 
               {/* Email capture for report recovery */}
-              {connectionId && (
-                <PmsEmailCapture platform="hostex" connectionId={connectionId} />
-              )}
+              <PmsEmailCapture platform="hostex" />
 
               {properties.length === 0 && (
                 <p className="text-sm text-stone-500 text-center py-4">

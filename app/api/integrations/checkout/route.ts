@@ -9,10 +9,19 @@ import { stripe, PLANS } from '@/app/lib/stripe'
  * After payment, redirects back to /{platform}?session_id=XXX&propertyId=YYY
  */
 export async function POST(req: NextRequest) {
-  const { plan, platform, connectionId, propertyId } = await req.json()
+  const { plan, platform, propertyId } = await req.json()
 
-  if (!plan || !platform || !connectionId || !propertyId) {
+  if (!plan || !platform || !propertyId) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+
+  // connectionId is stored server-side in httpOnly cookie — read it for metadata only
+  const connectionId = platform === 'hospitable'
+    ? req.cookies.get('hospitable_connection_id')?.value
+    : req.cookies.get('hostex_connection_id')?.value
+
+  if (!connectionId) {
+    return NextResponse.json({ error: 'Not connected. Please connect your account first.' }, { status: 401 })
   }
 
   if (!['hospitable', 'hostex'].includes(platform)) {

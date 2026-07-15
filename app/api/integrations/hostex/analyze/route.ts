@@ -22,7 +22,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Daily request limit reached. Please try again tomorrow.' }, { status: 429 })
   }
 
-  const { connectionId, accessToken: rawToken, plan, listingId, sessionId } = await req.json()
+  const connectionId = req.cookies.get('hostex_connection_id')?.value
+  const { plan, listingId, sessionId } = await req.json()
+
+  if (!connectionId) {
+    return NextResponse.json({ error: 'Not connected. Please connect your Hostex account.' }, { status: 401 })
+  }
 
   // Payment verification (skip in mock mode)
   if (process.env.USE_MOCK_API !== 'true') {
@@ -41,18 +46,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Resolve auth token
-  let accessToken: string
-  if (connectionId) {
-    const token = await getHostexConnection(connectionId)
-    if (!token) {
-      return NextResponse.json({ error: 'Connection not found. Please reconnect.' }, { status: 401 })
-    }
-    accessToken = token
-  } else if (rawToken) {
-    accessToken = rawToken
-  } else {
-    return NextResponse.json({ error: 'Missing connectionId or accessToken' }, { status: 400 })
+  // Resolve auth token from cookie-based connectionId
+  const accessToken = await getHostexConnection(connectionId)
+  if (!accessToken) {
+    return NextResponse.json({ error: 'Connection not found. Please reconnect.' }, { status: 401 })
   }
 
   const effectivePlan = plan || 'quick-score'

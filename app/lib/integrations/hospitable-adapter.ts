@@ -4,10 +4,9 @@
  * Fetches properties + reviews from the Hospitable Public API v2 and maps
  * them into ListingIQ's existing ListingInput shape.
  *
- * v1 scope: TEXT audit only (title, description, amenities, photoCount).
+ * v1 scope: full audit (title, description, amenities, photos with AI vision analysis).
  * Reviews: deferred to v2 per Hospitable's guidance — review-mapping code is
  * retained but gated behind includeReviews flag (default false).
- * Photo audit (vision): deferred to v2.
  *
  * Auth: Bearer token — works for both PAT (testing) and OAuth access token
  * (production). The caller supplies whichever they have.

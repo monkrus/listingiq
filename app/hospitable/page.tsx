@@ -38,7 +38,7 @@ type Step = 'connect' | 'properties' | 'plan-select' | 'analyzing' | 'report'
 
 export default function HospitablePage() {
   const [step, setStep] = useState<Step>('connect')
-  const [connectionId, setConnectionId] = useState<string | null>(null)
+  const [connected, setConnected] = useState(false)
   const [properties, setProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -54,7 +54,7 @@ export default function HospitablePage() {
   const [emailSending, setEmailSending] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
 
-  // On mount: check URL params for connection_id, session_id, or error
+  // On mount: check URL params for connection status, session_id, or error
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
 
@@ -66,11 +66,10 @@ export default function HospitablePage() {
       return
     }
 
-    // Fresh OAuth connection
-    const connected = params.get('connected')
-    if (connected) {
-      localStorage.setItem('hospitable_connection_id', connected)
-      setConnectionId(connected)
+    // Fresh OAuth connection (cookie is already set by callback)
+    const connectedParam = params.get('connected')
+    if (connectedParam === 'true') {
+      setConnected(true)
       window.history.replaceState({}, '', '/hospitable')
       return
     }
@@ -80,36 +79,29 @@ export default function HospitablePage() {
     const propertyId = params.get('propertyId')
     const plan = params.get('plan')
     if (sessionId && propertyId) {
-      const saved = localStorage.getItem('hospitable_connection_id')
-      if (saved) {
-        setConnectionId(saved)
-        window.history.replaceState({}, '', '/hospitable')
-        // Trigger analysis with payment session
-        runAnalysis(saved, propertyId, sessionId, plan || 'quick-score')
-      }
+      setConnected(true)
+      window.history.replaceState({}, '', '/hospitable')
+      // Trigger analysis with payment session
+      runAnalysis(propertyId, sessionId, plan || 'quick-score')
       return
     }
 
-    // Existing connection from localStorage
-    const saved = localStorage.getItem('hospitable_connection_id')
-    if (saved) {
-      setConnectionId(saved)
-    }
+    // Try loading properties — if cookie exists, server will accept the request
+    setConnected(true) // Optimistic; fetchProperties will reset if 401
   }, [])
 
-  // Fetch properties when we have a connection
-  const fetchProperties = useCallback(async (connId: string) => {
+  // Fetch properties (server reads connectionId from httpOnly cookie)
+  const fetchProperties = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/integrations/hospitable/properties?connectionId=${encodeURIComponent(connId)}`)
+      const res = await fetch('/api/integrations/hospitable/properties')
       const data = await res.json()
       if (!res.ok) {
         if (res.status === 401) {
-          localStorage.removeItem('hospitable_connection_id')
-          setConnectionId(null)
+          setConnected(false)
           setStep('connect')
-          setError('Your Hospitable session expired. Please reconnect.')
+          setError(data.error || 'Your Hospitable session expired. Please reconnect.')
           return
         }
         throw new Error(data.error || 'Failed to load properties')
@@ -123,10 +115,10 @@ export default function HospitablePage() {
     }
   }, [])
 
-  // Fetch saved reports for this connection
-  const fetchReports = useCallback(async (connId: string) => {
+  // Fetch saved reports
+  const fetchReports = useCallback(async () => {
     try {
-      const res = await fetch(`/api/integrations/reports?connectionId=${encodeURIComponent(connId)}&platform=hospitable`)
+      const res = await fetch('/api/integrations/reports?platform=hospitable')
       const data = await res.json()
       if (res.ok && data.reports) {
         setSavedReports(data.reports)
@@ -146,14 +138,14 @@ export default function HospitablePage() {
   }, [])
 
   useEffect(() => {
-    if (connectionId) {
-      fetchProperties(connectionId)
-      fetchReports(connectionId)
+    if (connected) {
+      fetchProperties()
+      fetchReports()
       fetchNotifications()
     }
-  }, [connectionId, fetchProperties, fetchReports, fetchNotifications])
+  }, [connected, fetchProperties, fetchReports, fetchNotifications])
 
-  async function runAnalysis(connId: string, propertyId: string, sessionId: string, plan: string) {
+  async function runAnalysis(propertyId: string, sessionId: string, plan: string) {
     const prop = properties.find(p => p.id === propertyId)
     setSelectedId(propertyId)
     setAnalyzingTitle(prop?.title || 'Property')
@@ -165,7 +157,6 @@ export default function HospitablePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          connectionId: connId,
           propertyId,
           plan,
           sessionId,
@@ -206,8 +197,7 @@ export default function HospitablePage() {
       }
 
       setStep('report')
-      // Refresh report history
-      fetchReports(connId)
+      fetchReports()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
       setStep('properties')
@@ -222,7 +212,7 @@ export default function HospitablePage() {
   async function handlePlanSelected(plan: 'quick-score' | 'full-audit') {
     setSelectedPlan(plan)
 
-    if (!connectionId || !selectedId) return
+    if (!selectedId) return
 
     // Create Stripe checkout session
     try {
@@ -232,7 +222,6 @@ export default function HospitablePage() {
         body: JSON.stringify({
           plan,
           platform: 'hospitable',
-          connectionId,
           propertyId: selectedId,
         }),
       })
@@ -270,9 +259,9 @@ export default function HospitablePage() {
     setEmailSending(false)
   }
 
-  function disconnect() {
-    localStorage.removeItem('hospitable_connection_id')
-    setConnectionId(null)
+  async function disconnect() {
+    await fetch('/api/integrations/hospitable/disconnect', { method: 'POST' })
+    setConnected(false)
     setProperties([])
     setReport(null)
     setSavedReports([])
@@ -321,11 +310,10 @@ export default function HospitablePage() {
           photoError={false}
         />
         {/* Apply optimizations to PMS */}
-        {connectionId && selectedId && (
+        {selectedId && (
           <div className="max-w-2xl mx-auto px-4">
             <PmsApplyBar
               platform="hospitable"
-              connectionId={connectionId}
               propertyId={selectedId}
               reportData={report}
               photoResults={photoResults}
@@ -511,9 +499,7 @@ export default function HospitablePage() {
               )}
 
               {/* Email capture for report recovery */}
-              {connectionId && (
-                <PmsEmailCapture platform="hospitable" connectionId={connectionId} />
-              )}
+              <PmsEmailCapture platform="hospitable" />
 
               {properties.length === 0 && (
                 <p className="text-sm text-stone-500 text-center py-4">

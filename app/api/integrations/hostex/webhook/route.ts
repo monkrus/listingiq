@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 import { logger } from '@/app/lib/logger'
 import { getSupabaseAdmin } from '@/app/lib/supabase'
 
@@ -8,36 +9,56 @@ import { getSupabaseAdmin } from '@/app/lib/supabase'
  * Receives webhook events from Hostex when listings are updated.
  * Events: listing.updated, listing.created, listing.deleted
  *
- * Setup: Configure this URL in Hostex's webhook settings.
- * Security: Validates the X-Hostex-Signature header.
+ * Security:
+ * - Validates HMAC SHA-256 signature via x-hostex-signature header
+ * - Uses crypto.timingSafeEqual to prevent timing attacks
+ * - Fails closed: returns 503 if HOSTEX_WEBHOOK_SECRET is unset
  */
 export async function POST(req: NextRequest) {
-  const signature = req.headers.get('x-hostex-signature')
   const webhookSecret = process.env.HOSTEX_WEBHOOK_SECRET
 
-  // Verify signature if secret is configured
-  if (webhookSecret && webhookSecret !== 'not-configured') {
-    if (!signature) {
-      logger.warn('hostex', 'webhook_no_signature')
-      return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
-    }
+  // Fail closed: if no webhook secret is configured, refuse all webhooks
+  if (!webhookSecret) {
+    logger.error('hostex', 'webhook_secret_missing', {
+      message: 'HOSTEX_WEBHOOK_SECRET is not set. Refusing unsigned webhooks.',
+    })
+    return NextResponse.json(
+      { error: 'Webhook verification not configured' },
+      { status: 503 }
+    )
+  }
 
-    const crypto = await import('crypto')
-    const body = await req.clone().text()
-    const expected = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(body)
-      .digest('hex')
+  const signature = req.headers.get('x-hostex-signature')
+  const body = await req.text()
 
-    if (signature !== expected && signature !== `sha256=${expected}`) {
-      logger.warn('hostex', 'webhook_invalid_signature')
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-    }
+  if (!signature) {
+    logger.warn('hostex', 'webhook_no_signature')
+    return NextResponse.json({ error: 'Missing signature' }, { status: 401 })
+  }
+
+  // Compute expected HMAC SHA-256
+  const expected = crypto
+    .createHmac('sha256', webhookSecret)
+    .update(body)
+    .digest('hex')
+
+  // Accept both raw hex and "sha256=hex" formats
+  const providedHex = signature.startsWith('sha256=')
+    ? signature.slice(7)
+    : signature
+
+  // Timing-safe comparison
+  const expectedBuf = Buffer.from(expected, 'hex')
+  const providedBuf = Buffer.from(providedHex, 'hex')
+
+  if (expectedBuf.length !== providedBuf.length || !crypto.timingSafeEqual(expectedBuf, providedBuf)) {
+    logger.warn('hostex', 'webhook_invalid_signature')
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
   let payload: any
   try {
-    payload = await req.json()
+    payload = JSON.parse(body)
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }

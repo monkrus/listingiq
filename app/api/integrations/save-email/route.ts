@@ -16,10 +16,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   }
 
-  const { email, platform, connectionId } = await req.json()
+  const { email, platform } = await req.json()
 
-  if (!email || !platform || !connectionId) {
+  if (!email || !platform) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+
+  const connectionId = platform === 'hospitable'
+    ? req.cookies.get('hospitable_connection_id')?.value
+    : platform === 'hostex'
+      ? req.cookies.get('hostex_connection_id')?.value
+      : undefined
+
+  if (!connectionId) {
+    return NextResponse.json({ error: 'Not connected' }, { status: 401 })
   }
 
   if (!['hospitable', 'hostex'].includes(platform)) {

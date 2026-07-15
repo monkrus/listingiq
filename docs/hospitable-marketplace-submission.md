@@ -63,10 +63,11 @@ Can provide SVG or alternate sizes on request.
 | Field | Value |
 |---|---|
 | OAuth Callback URL | https://listingiq.pro/api/hospitable/callback |
-| Scopes | properties:read, reviews:read |
+| Scopes | properties:read |
 | Data access | Read-only — ListingIQ never writes to Hospitable |
 | API version | Hospitable Public API v2 |
 | Token handling | Access tokens auto-refresh via refresh_token grant |
+| CSRF protection | Random state nonce in httpOnly cookie, validated on callback |
 
 ### OAuth Flow
 

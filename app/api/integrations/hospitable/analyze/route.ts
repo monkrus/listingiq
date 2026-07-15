@@ -21,7 +21,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Daily request limit reached. Please try again tomorrow.' }, { status: 429 })
   }
 
-  const { connectionId, token: rawToken, plan, propertyId, sessionId } = await req.json()
+  const connectionId = req.cookies.get('hospitable_connection_id')?.value
+  const { plan, propertyId, sessionId } = await req.json()
+
+  if (!connectionId) {
+    return NextResponse.json({ error: 'Not connected. Please connect your Hospitable account.' }, { status: 401 })
+  }
 
   // Payment verification (skip in mock mode)
   if (process.env.USE_MOCK_API !== 'true') {
@@ -40,20 +45,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Resolve auth token
+  // Resolve auth token from cookie-based connectionId
   let token: string
-  if (connectionId) {
-    try {
-      token = await resolveToken(connectionId)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Connection error'
-      logger.error('hospitable', 'token_resolve_failed', { connectionId, error: msg })
-      return NextResponse.json({ error: msg }, { status: 401 })
-    }
-  } else if (rawToken) {
-    token = rawToken
-  } else {
-    return NextResponse.json({ error: 'Missing connectionId or token' }, { status: 400 })
+  try {
+    token = await resolveToken(connectionId)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Connection error'
+    logger.error('hospitable', 'token_resolve_failed', { connectionId, error: msg })
+    return NextResponse.json({ error: msg }, { status: 401 })
   }
 
   const effectivePlan = plan || 'quick-score'

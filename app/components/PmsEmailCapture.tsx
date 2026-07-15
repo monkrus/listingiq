@@ -3,11 +3,10 @@ import { useState } from 'react'
 
 interface Props {
   platform: 'hospitable' | 'hostex'
-  connectionId: string
   onEmailSaved?: (email: string) => void
 }
 
-export default function PmsEmailCapture({ platform, connectionId, onEmailSaved }: Props) {
+export default function PmsEmailCapture({ platform, onEmailSaved }: Props) {
   const [email, setEmail] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -40,7 +39,7 @@ export default function PmsEmailCapture({ platform, connectionId, onEmailSaved }
       const res = await fetch('/api/integrations/save-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmed, platform, connectionId }),
+        body: JSON.stringify({ email: trimmed, platform }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to save email')
