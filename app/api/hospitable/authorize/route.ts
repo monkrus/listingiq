@@ -22,7 +22,7 @@ export async function GET() {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
-    scope: 'properties:read',
+    scope: 'property:read listing:read',
     state,
   })
 
