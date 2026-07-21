@@ -297,7 +297,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       <ReportSection title="Amenity strength" score={d.amenityScore} defaultOpen>
         <div className="mt-3">
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Your strongest amenities</p>
-          <div className="mb-3">{d.topAmenities.map((a, i) => <Chip key={i} text={a} />)}</div>
+          <div className="mb-3 flex flex-wrap gap-1.5">{d.topAmenities.map((a, i) => <Chip key={i} text={a} />)}</div>
           {d.amenityGaps.length > 0 && (
             <>
               <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Consider adding</p>
@@ -330,7 +330,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       <ReportSection title="Review sentiment" score={d.reviewScore} defaultOpen>
         <div className="mt-3">
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Review highlights</p>
-          <div className="mb-3">{d.guestLoves.map((g, i) => <Chip key={i} text={g} />)}</div>
+          <div className="mb-3 flex flex-wrap gap-1.5">{d.guestLoves.map((g, i) => <Chip key={i} text={g} />)}</div>
           {d.reviewRisks.length > 0 && (
             <>
               <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Watch out for</p>
@@ -344,7 +344,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       <ReportSection title="Keywords & optimization tips" score={null} defaultOpen>
         <div className="mt-3">
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Phrases your target guests search for</p>
-          <div className="mb-3">{d.seoKeywords.map((k, i) => <Chip key={i} text={k} />)}</div>
+          <div className="mb-3 flex flex-wrap gap-1.5">{d.seoKeywords.map((k, i) => <Chip key={i} text={k} />)}</div>
           <p className="text-[11px] text-stone-600 mb-3 leading-relaxed">These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</p>
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Listing optimization tips</p>
           {d.conversionTips.map((t, i) => <RowItem key={i} text={t} color="green" />)}
