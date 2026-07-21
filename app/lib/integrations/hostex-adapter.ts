@@ -91,15 +91,37 @@ function mapHostexListingToInput(
 ): ListingInput {
   const m = listing?.metadata ?? {}
 
+  // Location: city_name, province_name, country_code
   const location =
     m.location ??
-    ([m.city, m.state, m.country].filter(Boolean).join(', ') || undefined)
+    ([m.city_name, m.province_name, m.country_code].filter(Boolean).join(', ') || undefined)
 
-  const photoUrls: string[] = Array.isArray(m.photos)
-    ? m.photos
-        .map((p: any) => (typeof p === 'string' ? p : p?.url))
-        .filter(Boolean)
-        .slice(0, 10)
+  // Photos: house_picture_list[].original_url (primary), fallback to photos[]
+  const photoUrls: string[] = []
+  const picList = m.house_picture_list ?? m.photos
+  if (Array.isArray(picList)) {
+    for (const p of picList) {
+      const url = typeof p === 'string' ? p : p?.original_url ?? p?.url
+      if (url && !photoUrls.includes(url)) photoUrls.push(url)
+    }
+  }
+
+  // Title & description: top-level title, or descriptions[0] (locale-based)
+  const desc0 = Array.isArray(m.descriptions) ? m.descriptions[0] : null
+  const title = listing?.title ?? desc0?.title ?? m.title ?? m.name ?? ''
+  const description = desc0?.description ?? m.description ?? m.summary ?? ''
+
+  // Amenities: amenity_list[] (string codes) or amenities[]
+  const rawAmenities = m.amenity_list ?? m.amenities ?? []
+  const amenities: string[] = Array.isArray(rawAmenities)
+    ? rawAmenities.map((a: any) => {
+        const name = typeof a === 'string' ? a : a?.name
+        // Convert codes like "WIRELESS_INTERNET" -> "Wireless Internet"
+        if (!name) return ''
+        const formatted = name.toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+        // Fix common abbreviations
+        return formatted.replace(/\bAc\b/g, 'AC').replace(/\bTv\b/g, 'TV')
+      }).filter(Boolean)
     : []
 
   const reviewComments = (reviews?.comments ?? []).slice(0, 12)
@@ -109,19 +131,21 @@ function mapHostexListingToInput(
       ? Math.round((ratings.reduce((a, b) => a + b, 0) / ratings.length) * 100) / 100
       : m.rating ?? undefined
 
+  // Airbnb URL from listing_id
+  const airbnbUrl = listing?.url ?? m.listing_url ?? listing.listing_url
+    ?? (listing?.listing_id ? `https://www.airbnb.com/rooms/${listing.listing_id}` : undefined)
+
   return {
-    title: m.title ?? m.name ?? '',
+    title,
     location,
-    description: m.description ?? m.summary ?? '',
-    amenities: Array.isArray(m.amenities)
-      ? m.amenities.map((a: any) => (typeof a === 'string' ? a : a?.name)).filter(Boolean)
-      : [],
+    description,
+    amenities,
     photoCount: typeof m.photo_count === 'number' ? m.photo_count : photoUrls.length,
-    photoUrls,
+    photoUrls: photoUrls.slice(0, 10),
     rating: avgRating,
     reviewCount: reviews?.comments.length ?? m.review_count ?? undefined,
     reviews: reviewComments,
-    url: m.listing_url ?? listing.listing_url ?? undefined,
+    url: airbnbUrl,
     isDemo: false,
   }
 }
