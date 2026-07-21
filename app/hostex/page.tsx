@@ -66,8 +66,10 @@ export default function HostexPage() {
     const plan = params.get('plan')
     if (sessionId && propertyId) {
       setConnected(true)
+      const effectivePlan = (plan === 'full-audit' ? 'full-audit' : 'quick-score') as 'quick-score' | 'full-audit'
+      setSelectedPlan(effectivePlan)
       window.history.replaceState({}, '', '/hostex')
-      runAnalysis(propertyId, sessionId, plan || 'quick-score')
+      runAnalysis(propertyId, sessionId, effectivePlan)
       return
     }
 
@@ -320,7 +322,7 @@ export default function HostexPage() {
         <Report
           data={report}
           onReset={backToProperties}
-          plan={photoResults ? 'full-audit' : 'quick-score'}
+          plan={selectedPlan}
           isDemo={false}
           listingUrl=""
           initialPhotoResults={photoResults}
