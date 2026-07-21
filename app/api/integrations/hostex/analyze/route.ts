@@ -13,11 +13,11 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
 
   // Rate limiting
-  const { limited } = rateLimit(ip, 5, 60_000)
+  const { limited } = rateLimit(ip, 15, 60_000)
   if (limited) {
     return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 })
   }
-  const daily = await dailyRateLimit(ip, 'hostex-analyze', 30)
+  const daily = await dailyRateLimit(ip, 'hostex-analyze', 100)
   if (daily.limited) {
     return NextResponse.json({ error: 'Daily request limit reached. Please try again tomorrow.' }, { status: 429 })
   }
