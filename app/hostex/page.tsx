@@ -281,6 +281,7 @@ export default function HostexPage() {
 
   async function disconnect() {
     await fetch('/api/integrations/hostex/disconnect', { method: 'POST' })
+    localStorage.removeItem('pms_email_hostex')
     setConnected(false)
     setProperties([])
     setReport(null)

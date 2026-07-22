@@ -261,6 +261,7 @@ export default function HospitablePage() {
 
   async function disconnect() {
     await fetch('/api/integrations/hospitable/disconnect', { method: 'POST' })
+    localStorage.removeItem('pms_email_hospitable')
     setConnected(false)
     setProperties([])
     setReport(null)
