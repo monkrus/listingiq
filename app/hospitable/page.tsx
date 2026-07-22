@@ -4,7 +4,6 @@ import Logo from '../components/Logo'
 import Report from '../components/Report'
 import { ReportData } from '../lib/types'
 import { PhotoAnalysisResult } from '../api/analyze-photos/route'
-import PmsApplyBar from '../components/PmsApplyBar'
 import PmsEmailCapture from '../components/PmsEmailCapture'
 
 interface WebhookNotification {
@@ -309,17 +308,6 @@ export default function HospitablePage() {
           onUpgrade={() => {}}
           photoError={false}
         />
-        {/* Apply optimizations to PMS */}
-        {selectedId && (
-          <div className="max-w-2xl mx-auto px-4">
-            <PmsApplyBar
-              platform="hospitable"
-              propertyId={selectedId}
-              reportData={report}
-              photoResults={photoResults}
-            />
-          </div>
-        )}
         {/* Email report to self */}
         {lastReportId && (
           <div className="max-w-2xl mx-auto px-4">

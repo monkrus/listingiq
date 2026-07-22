@@ -89,7 +89,7 @@ const s = StyleSheet.create({
   priorityRowLast: { flexDirection: 'row', gap: 8, paddingVertical: 5 },
   priorityNum: { fontFamily: 'Syne', fontSize: 9, fontWeight: 700, color: C.amberAccent, width: 20, flexShrink: 0 },
   priorityText: { fontSize: 9, color: C.amberText, flex: 1, lineHeight: 1.4 },
-  sectionCard: { backgroundColor: C.white, border: `1pt solid ${C.border}`, borderRadius: 10, marginBottom: 8, overflow: 'hidden', minPresenceAhead: 30 },
+  sectionCard: { backgroundColor: C.white, border: `1pt solid ${C.border}`, borderRadius: 10, marginBottom: 8, minPresenceAhead: 30 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottom: '1pt solid #f5f5f4', minPresenceAhead: 30 },
   sectionTitle: { fontFamily: 'Syne', fontSize: 10, fontWeight: 700, color: C.brand },
   scorePill: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
@@ -108,7 +108,7 @@ const s = StyleSheet.create({
   rowItemLast: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingVertical: 4 },
   dot: { width: 5, height: 5, borderRadius: 3, marginTop: 2, flexShrink: 0 },
   rowItemText: { fontSize: 8, color: C.brand, flex: 1, lineHeight: 1.4 },
-  subLabel: { fontSize: 7, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 5, marginTop: 8 },
+  subLabel: { fontSize: 7, color: C.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 5, marginTop: 8, minPresenceAhead: 40 },
   boldText: { fontWeight: 700 },
   competitorBox: { backgroundColor: C.blueBg, border: '1pt solid #bfdbfe', borderRadius: 10, padding: 14, marginBottom: 8 },
   competitorTitle: { fontFamily: 'Syne', fontSize: 8, fontWeight: 700, color: C.blueText, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
@@ -118,11 +118,11 @@ const s = StyleSheet.create({
   footerText: { fontSize: 7, color: C.muted },
 })
 
-function SectionCard({ title, score, children, allowWrap }: { title: string; score: number; children: React.ReactNode; allowWrap?: boolean }) {
+function SectionCard({ title, score, children }: { title: string; score: number; children: React.ReactNode }) {
   const pillBg = score >= 80 ? '#dcfce7' : score >= 60 ? '#fef3c7' : '#fee2e2'
   const pillColor = score >= 80 ? '#166534' : score >= 60 ? '#92400e' : '#991b1b'
   return (
-    <View style={s.sectionCard} wrap={!!allowWrap}>
+    <View style={s.sectionCard}>
       <View style={s.sectionHeader} minPresenceAhead={60}>
         <Text style={s.sectionTitle}>{title}</Text>
         <View style={[s.scorePill, { backgroundColor: pillBg }]}>
@@ -284,7 +284,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
           </SectionCard>
 
           {/* Description */}
-          <SectionCard title="Description quality" score={d.descriptionScore} allowWrap>
+          <SectionCard title="Description quality" score={d.descriptionScore}>
             <ProblemTags items={d.descriptionProblems} />
             <Text style={s.subLabel}>Suggested rewrite — review and edit [bracketed placeholders] before using</Text>
             <View style={s.rewriteBox}><Text style={s.rewriteText}>{d.descriptionRewrite}</Text></View>
@@ -381,7 +381,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
           </SectionCard>
 
           {/* Guest persona */}
-          <SectionCard title="Guest persona match" score={d.personaScore} allowWrap>
+          <SectionCard title="Guest persona match" score={d.personaScore}>
             <View style={{ marginBottom: 10 }} wrap={false}>
               <Text style={[s.rowItemText, { lineHeight: 1.6 }]}>
                 Primary guest type: <Text style={s.boldText}>{d.primaryPersona}</Text>
@@ -420,8 +420,10 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
             <Text style={s.subLabel}>Phrases your target guests search for</Text>
             <ChipTags items={d.seoKeywords} />
             <Text style={[s.rowItemText, { fontSize: 7, color: C.muted, lineHeight: 1.5, marginBottom: 6 }]}>These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</Text>
-            <Text style={s.subLabel}>Listing optimization tips</Text>
-            <RowItems items={d.conversionTips} dotColor={C.green} />
+            <View minPresenceAhead={80}>
+              <Text style={s.subLabel}>Listing optimization tips</Text>
+              <RowItems items={d.conversionTips} dotColor={C.green} />
+            </View>
             </View>
           </View>
         </View>

@@ -4,7 +4,6 @@ import Logo from '../components/Logo'
 import Report from '../components/Report'
 import { ReportData } from '../lib/types'
 import { PhotoAnalysisResult } from '../api/analyze-photos/route'
-import PmsApplyBar from '../components/PmsApplyBar'
 import PmsEmailCapture from '../components/PmsEmailCapture'
 
 interface WebhookNotification {
@@ -97,7 +96,8 @@ export default function HostexPage() {
         throw new Error(data.error || 'Failed to load listings')
       }
       setProperties(data.properties || [])
-      setStep('properties')
+      // Don't overwrite 'analyzing' or 'report' step (e.g. when returning from Stripe payment)
+      setStep(prev => prev === 'analyzing' || prev === 'report' ? prev : 'properties')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load listings')
     } finally {
@@ -330,17 +330,6 @@ export default function HostexPage() {
           onUpgrade={() => {}}
           photoError={false}
         />
-        {/* Apply optimizations to PMS */}
-        {selectedId && (
-          <div className="max-w-2xl mx-auto px-4">
-            <PmsApplyBar
-              platform="hostex"
-              propertyId={selectedId}
-              reportData={report}
-              photoResults={photoResults}
-            />
-          </div>
-        )}
         {/* Email report to self */}
         {lastReportId && (
           <div className="max-w-2xl mx-auto px-4">
