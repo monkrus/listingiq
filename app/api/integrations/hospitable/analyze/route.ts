@@ -103,22 +103,8 @@ export async function POST(req: NextRequest) {
         sourceLabel: 'data imported from Hospitable PMS',
       })
 
-      const result = {
-        propertyId: id,
-        readiness: readiness.mode,
-        report,
-        photoUrls: input.photoUrls,
-        listing: {
-          title: input.title,
-          location: input.location,
-          photoCount: input.photoCount,
-          amenities: input.amenities?.slice(0, 5),
-        },
-      }
-      results.push(result)
-
       // Persist the report
-      await savePmsReport({
+      const reportId = await savePmsReport({
         platform: 'hospitable',
         connectionId: connectionId || 'pat',
         propertyId: id,
@@ -127,6 +113,20 @@ export async function POST(req: NextRequest) {
         listingData: input,
         reportData: report,
         overallScore: (report.overallScore as number) ?? 0,
+      })
+
+      results.push({
+        propertyId: id,
+        readiness: readiness.mode,
+        report,
+        reportId,
+        photoUrls: input.photoUrls,
+        listing: {
+          title: input.title,
+          location: input.location,
+          photoCount: input.photoCount,
+          amenities: input.amenities?.slice(0, 5),
+        },
       })
     } catch (err) {
       if (err instanceof AnalysisError) {

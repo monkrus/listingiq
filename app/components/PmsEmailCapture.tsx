@@ -57,7 +57,7 @@ export default function PmsEmailCapture({ platform, onEmailSaved }: Props) {
   return (
     <div className="border border-stone-200 rounded-xl p-3 mb-4 bg-stone-50">
       <p className="text-xs text-stone-600 mb-2">
-        Save your email to access reports from any device
+        Save your email to receive reports after analysis
       </p>
       <div className="flex gap-2">
         <input

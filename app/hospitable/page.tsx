@@ -170,6 +170,7 @@ export default function HospitablePage() {
       }
 
       setReport(result.report as ReportData)
+      if (result.reportId) setLastReportId(result.reportId)
 
       // Run photo analysis if property has photo URLs and plan is full-audit
       if (result.photoUrls?.length && plan === 'full-audit') {

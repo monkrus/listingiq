@@ -190,6 +190,7 @@ export default function HostexPage() {
       }
 
       setReport(result.report as ReportData)
+      if (result.reportId) setLastReportId(result.reportId)
 
       // Run photo analysis if listing has photo URLs and plan is full-audit
       if (result.photoUrls?.length && plan === 'full-audit') {
