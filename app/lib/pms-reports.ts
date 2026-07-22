@@ -61,7 +61,7 @@ export async function savePmsReport(input: PmsReportInput): Promise<string | nul
   return data.id
 }
 
-/** Get all reports for a connection. */
+/** Get all reports for a platform (persists across reconnects). */
 export async function getPmsReports(connectionId: string, platform?: string): Promise<PmsReport[]> {
   const db = getSupabaseAdmin()
   if (!db) return []
@@ -69,12 +69,13 @@ export async function getPmsReports(connectionId: string, platform?: string): Pr
   let query = db
     .from('pms_reports')
     .select('*')
-    .eq('connection_id', connectionId)
     .order('created_at', { ascending: false })
     .limit(50)
 
   if (platform) {
     query = query.eq('platform', platform)
+  } else {
+    query = query.eq('connection_id', connectionId)
   }
 
   const { data, error } = await query
