@@ -138,6 +138,7 @@ export async function analyzeListingInput(
   listing: ListingInput,
   opts?: AnalyzeOptions
 ): Promise<Record<string, unknown>> {
+  const t0 = Date.now()
   const clamped = clampInput(listing)
   const prompt = buildPrompt(clamped, opts?.sourceLabel)
 
@@ -214,6 +215,9 @@ export async function analyzeListingInput(
 
   report = validateReport(report!, clamped)
   report.estimatedImprovement = estimateImprovement(report.overallScore as number)
+
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
+  console.log(`[analyze-core] Analysis completed in ${elapsed}s (score: ${report.overallScore})`)
 
   return report
 }
