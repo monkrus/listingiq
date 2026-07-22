@@ -166,6 +166,9 @@ export default function HospitablePage() {
         throw new Error(result?.reason || 'Property could not be analyzed')
       }
 
+      if (result.report?._analysisTime) {
+        console.log(`[ListingIQ] Analysis completed in ${result.report._analysisTime}s (score: ${result.report.overallScore})`)
+      }
       setReport(result.report as ReportData)
       // Run photo analysis if property has photo URLs and plan is full-audit
       if (result.photoUrls?.length && plan === 'full-audit') {
@@ -551,7 +554,7 @@ export default function HospitablePage() {
                 Analyzing {analyzingTitle}
               </p>
               <p className="text-xs text-stone-500">
-                This typically takes about 3 minutes...
+                This typically takes about a minute...
               </p>
             </div>
           )}

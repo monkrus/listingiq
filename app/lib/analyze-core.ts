@@ -218,6 +218,7 @@ export async function analyzeListingInput(
 
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
   console.log(`[analyze-core] Analysis completed in ${elapsed}s (score: ${report.overallScore})`)
+  report._analysisTime = elapsed
 
   return report
 }

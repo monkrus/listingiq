@@ -357,6 +357,9 @@ export default function Home() {
         }
       }
 
+      if (data?._analysisTime) {
+        console.log(`[ListingIQ] Analysis completed in ${data._analysisTime}s (score: ${data.overallScore})`)
+      }
       setReport(data)
       setStep('report')
       // Clean checkout params from URL so a browser refresh restores
@@ -679,7 +682,7 @@ export default function Home() {
                 <p className="text-xs text-stone-400 mt-3">
                   {activePlan === 'full-audit'
                     ? <strong>Full Audit can take up to 3 minutes</strong>
-                    : 'Quick Score typically takes up to 60 seconds'}
+                    : 'Quick Score typically takes about a minute'}
                 </p>
               </div>
             </div>

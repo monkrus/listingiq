@@ -186,6 +186,9 @@ export default function HostexPage() {
         throw new Error(result?.reason || 'Listing could not be analyzed')
       }
 
+      if (result.report?._analysisTime) {
+        console.log(`[ListingIQ] Analysis completed in ${result.report._analysisTime}s (score: ${result.report.overallScore})`)
+      }
       setReport(result.report as ReportData)
       // Run photo analysis if listing has photo URLs and plan is full-audit
       if (result.photoUrls?.length && plan === 'full-audit') {
@@ -587,7 +590,7 @@ export default function HostexPage() {
                 Analyzing {analyzingTitle}
               </p>
               <p className="text-xs text-stone-500">
-                This typically takes 30-60 seconds...
+                This typically takes about a minute...
               </p>
             </div>
           )}
