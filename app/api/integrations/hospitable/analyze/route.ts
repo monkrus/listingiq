@@ -7,6 +7,7 @@ import { rateLimit, dailyRateLimit } from '@/app/lib/rate-limit'
 import { savePmsReport } from '@/app/lib/pms-reports'
 import { logger } from '@/app/lib/logger'
 import { stripe } from '@/app/lib/stripe'
+import { triggerReportEmail } from '@/app/lib/trigger-report-email'
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
@@ -151,6 +152,13 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       logger.error('hospitable', 'capture_failed', { sessionId, error: String(err) })
     }
+  }
+
+  // Send report email (fire-and-forget)
+  if (sessionId) {
+    triggerReportEmail(sessionId).catch(err =>
+      logger.error('hospitable', 'email_trigger_failed', { sessionId, error: String(err) })
+    )
   }
 
   return NextResponse.json({ source: 'hospitable', count: results.length, results })
