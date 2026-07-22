@@ -4,6 +4,7 @@ import Logo from '../components/Logo'
 import Report from '../components/Report'
 import { ReportData } from '../lib/types'
 import { PhotoAnalysisResult } from '../api/analyze-photos/route'
+import PhotoUploadStep from '../components/PhotoUploadStep'
 
 const LOADING_STEPS = [
   'Reading listing details...',
@@ -50,7 +51,7 @@ interface SavedReport {
   listing_data: { title?: string }
 }
 
-type Step = 'connect' | 'properties' | 'plan-select' | 'analyzing' | 'report'
+type Step = 'connect' | 'properties' | 'plan-select' | 'photos' | 'analyzing' | 'report'
 
 export default function HospitablePage() {
   const [step, setStep] = useState<Step>('connect')
@@ -68,6 +69,8 @@ export default function HospitablePage() {
   const [savedReports, setSavedReports] = useState<SavedReport[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [updatedPropertyIds, setUpdatedPropertyIds] = useState<Set<string>>(new Set())
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoUploadId, setPhotoUploadId] = useState<string | null>(null)
 
   // On mount: check URL params for connection status, session_id, or error
   useEffect(() => {
@@ -203,23 +206,34 @@ export default function HospitablePage() {
         console.log(`[ListingIQ] Analysis completed in ${result.report._analysisTime}s (score: ${result.report.overallScore})`)
       }
       setReport(result.report as ReportData)
-      // Run photo analysis if property has photo URLs and plan is full-audit
-      if (result.photoUrls?.length && plan === 'full-audit') {
+      // Photo analysis for Full Audit
+      if (plan === 'full-audit') {
+        const listingContext = {
+          title: result.listing?.title || '',
+          amenities: result.listing?.amenities || [],
+          missingPhotos: result.report?.missingPhotos || [],
+        }
         try {
-          const photoRes = await fetch('/api/analyze-photos', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              photoUrls: result.photoUrls.slice(0, 10),
-              sessionId,
-              listingContext: {
-                title: result.listing?.title || '',
-                amenities: result.listing?.amenities || [],
-                missingPhotos: result.report?.missingPhotos || [],
-              },
-            }),
-          })
-          if (photoRes.ok) {
+          let photoRes: Response | null = null
+          // Priority 1: user-uploaded photos
+          const savedUploadId = photoUploadId || localStorage.getItem('listingiq_pms_upload_id')
+          if (savedUploadId) {
+            photoRes = await fetch('/api/analyze-photos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uploadId: savedUploadId, sessionId, listingContext }),
+            })
+            localStorage.removeItem('listingiq_pms_upload_id')
+          }
+          // Priority 2: listing photos from adapter
+          if (!photoRes && result.photoUrls?.length) {
+            photoRes = await fetch('/api/analyze-photos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ photoUrls: result.photoUrls.slice(0, 10), sessionId, listingContext }),
+            })
+          }
+          if (photoRes?.ok) {
             const photoData = await photoRes.json()
             setPhotoResults(photoData)
           }
@@ -260,7 +274,42 @@ export default function HospitablePage() {
 
     if (!selectedId) return
 
-    // Create Stripe checkout session
+    // Full Audit: show photo upload step first
+    if (plan === 'full-audit') {
+      setStep('photos')
+      return
+    }
+
+    // Quick Score: go straight to payment
+    goToCheckout(plan)
+  }
+
+  async function handlePhotosContinue(files: File[], _previews: string[]) {
+    setPhotoUploading(true)
+    try {
+      const form = new FormData()
+      files.forEach(f => form.append('photos', f))
+      const res = await fetch('/api/upload-photos', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
+      setPhotoUploadId(data.uploadId)
+      goToCheckout(selectedPlan, data.uploadId)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Photo upload failed')
+      setStep('plan-select')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
+  async function goToCheckout(plan: string, uploadId?: string) {
+    if (!selectedId) return
+
+    if (process.env.NEXT_PUBLIC_USE_MOCK_API === 'true') {
+      runAnalysis(selectedId, '', plan)
+      return
+    }
+
     try {
       const res = await fetch('/api/integrations/checkout', {
         method: 'POST',
@@ -274,7 +323,8 @@ export default function HospitablePage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Checkout failed')
 
-      // Redirect to Stripe
+      if (uploadId) localStorage.setItem('listingiq_pms_upload_id', uploadId)
+
       window.location.href = data.url
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Checkout failed')
@@ -456,6 +506,15 @@ export default function HospitablePage() {
                 Back to properties
               </button>
             </div>
+          )}
+
+          {/* Photo upload (Full Audit only) */}
+          {step === 'photos' && (
+            <PhotoUploadStep
+              onContinue={handlePhotosContinue}
+              onSkip={() => goToCheckout(selectedPlan)}
+              uploading={photoUploading}
+            />
           )}
 
           {/* Properties list */}
