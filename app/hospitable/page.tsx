@@ -1,10 +1,27 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Logo from '../components/Logo'
 import Report from '../components/Report'
 import { ReportData } from '../lib/types'
 import { PhotoAnalysisResult } from '../api/analyze-photos/route'
 
+const LOADING_STEPS = [
+  'Reading listing details...',
+  'Analyzing title & description...',
+  'Evaluating guest persona fit...',
+  'Checking amenity competitiveness...',
+  'Reviewing guest sentiment...',
+  'Generating SEO keywords...',
+  'Writing optimized description...',
+  'Compiling your report...',
+]
+
+const LOADING_STEPS_WITH_PHOTOS = [
+  ...LOADING_STEPS,
+  'Analyzing your listing photos...',
+  'Scoring each photo...',
+  'Generating photo report...',
+]
 
 interface WebhookNotification {
   propertyId: string
@@ -46,6 +63,8 @@ export default function HospitablePage() {
   const [report, setReport] = useState<ReportData | null>(null)
   const [photoResults, setPhotoResults] = useState<PhotoAnalysisResult | null>(null)
   const [analyzingTitle, setAnalyzingTitle] = useState('')
+  const [stepIndex, setStepIndex] = useState(-1)
+  const stepTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [savedReports, setSavedReports] = useState<SavedReport[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [updatedPropertyIds, setUpdatedPropertyIds] = useState<Set<string>>(new Set())
@@ -148,6 +167,20 @@ export default function HospitablePage() {
     setStep('analyzing')
     setError('')
 
+    // Start animated loading steps
+    const steps = plan === 'full-audit' ? LOADING_STEPS_WITH_PHOTOS : LOADING_STEPS
+    setStepIndex(0)
+    let idx = 0
+    if (stepTimerRef.current) clearInterval(stepTimerRef.current)
+    stepTimerRef.current = setInterval(() => {
+      idx++
+      if (idx < steps.length) {
+        setStepIndex(idx)
+      } else {
+        if (stepTimerRef.current) clearInterval(stepTimerRef.current)
+      }
+    }, 6000)
+
     try {
       const res = await fetch('/api/integrations/hospitable/analyze', {
         method: 'POST',
@@ -178,6 +211,7 @@ export default function HospitablePage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               photoUrls: result.photoUrls.slice(0, 10),
+              sessionId,
               listingContext: {
                 title: result.listing?.title || '',
                 amenities: result.listing?.amenities || [],
@@ -194,6 +228,7 @@ export default function HospitablePage() {
         }
       }
 
+      if (stepTimerRef.current) clearInterval(stepTimerRef.current)
       setStep('report')
       fetchReports()
 
@@ -209,6 +244,7 @@ export default function HospitablePage() {
         }
       }
     } catch (err) {
+      if (stepTimerRef.current) clearInterval(stepTimerRef.current)
       setError(err instanceof Error ? err.message : 'Analysis failed')
       setStep('properties')
     }
@@ -553,8 +589,15 @@ export default function HospitablePage() {
               <p style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-stone-900 mb-1">
                 Analyzing {analyzingTitle}
               </p>
-              <p className="text-xs text-stone-500">
-                This typically takes about a minute...
+              <ul className="text-xs text-stone-500 space-y-1 mt-3 mb-3">
+                {(selectedPlan === 'full-audit' ? LOADING_STEPS_WITH_PHOTOS : LOADING_STEPS).map((s, i) => (
+                  <li key={i} className={i <= stepIndex ? 'text-stone-700' : 'text-stone-300'}>
+                    {i < stepIndex ? '✓' : i === stepIndex ? '›' : '·'} {s}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-stone-400">
+                {selectedPlan === 'full-audit' ? 'Full Audit can take up to 3 minutes' : 'This typically takes about a minute...'}
               </p>
             </div>
           )}
