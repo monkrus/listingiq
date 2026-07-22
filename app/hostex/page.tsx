@@ -318,7 +318,25 @@ export default function HostexPage() {
           listingUrl=""
           initialPhotoResults={photoResults}
           initialPhotoPreviews={null}
-          onUpgrade={() => {}}
+          onUpgrade={async () => {
+            if (!selectedId) return
+            try {
+              const res = await fetch('/api/integrations/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  plan: 'full-audit-upgrade',
+                  platform: 'hostex',
+                  propertyId: selectedId,
+                }),
+              })
+              const data = await res.json()
+              if (!res.ok) throw new Error(data.error || 'Checkout failed')
+              window.location.href = data.url
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Upgrade checkout failed')
+            }
+          }}
           photoError={false}
         />
       </main>
