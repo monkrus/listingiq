@@ -81,7 +81,9 @@ export function validateReport(report: Record<string, unknown>, listing: Listing
   // --- Review score cap based on review count ---
   const reviewCount = listing.reviewCount ?? 0
   const reviewScore = report.reviewScore as number
-  if (reviewCount < 15 && reviewScore > 70) {
+  if (reviewCount === 0 && reviewScore > 25) {
+    report.reviewScore = 25
+  } else if (reviewCount < 15 && reviewScore > 70) {
     report.reviewScore = 70
   } else if (reviewCount < 30 && reviewScore > 80) {
     report.reviewScore = 80

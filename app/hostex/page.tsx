@@ -4,7 +4,7 @@ import Logo from '../components/Logo'
 import Report from '../components/Report'
 import { ReportData } from '../lib/types'
 import { PhotoAnalysisResult } from '../api/analyze-photos/route'
-import PmsEmailCapture from '../components/PmsEmailCapture'
+
 
 interface WebhookNotification {
   propertyId: string
@@ -487,8 +487,6 @@ export default function HostexPage() {
                 </div>
               )}
 
-              {/* Email capture for report recovery */}
-              <PmsEmailCapture platform="hostex" />
 
               {properties.length === 0 && (
                 <p className="text-sm text-stone-500 text-center py-4">
