@@ -143,6 +143,7 @@ export async function sendReceiptEmail(opts: {
   sessionId: string
   reportData?: Record<string, unknown>
   photoScore?: number | null
+  platform?: string
 }) {
   if (!resend) {
     console.warn('[email] RESEND_API_KEY not configured — skipping email')
@@ -150,7 +151,10 @@ export async function sendReceiptEmail(opts: {
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://listingiq.pro'
-  const reportUrl = `${baseUrl}/success?session_id=${opts.sessionId}`
+  // PMS reports link to the integration page; main app links to /success
+  const reportUrl = opts.platform
+    ? `${baseUrl}/${opts.platform}?session_id=${opts.sessionId}`
+    : `${baseUrl}/success?session_id=${opts.sessionId}`
   const planName = opts.plan === 'full-audit' ? 'Full Audit' : 'Quick Score'
   const planPrice = opts.plan === 'full-audit' ? '$49' : '$29'
 

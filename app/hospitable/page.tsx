@@ -104,6 +104,22 @@ export default function HospitablePage() {
       return
     }
 
+    // Email re-access: session_id without propertyId — load saved report
+    if (sessionId && !propertyId) {
+      fetch(`/api/integrations/reports?sessionId=${encodeURIComponent(sessionId)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.report) {
+            setReport(data.report.report_data as ReportData)
+            setSelectedPlan((data.report.plan || 'quick-score') as 'quick-score' | 'full-audit')
+            setStep('report')
+          }
+        })
+        .catch(() => {})
+      window.history.replaceState({}, '', '/hospitable')
+      return
+    }
+
     // Try loading properties — if cookie exists, server will accept the request
     setConnected(true) // Optimistic; fetchProperties will reset if 401
   }, [])

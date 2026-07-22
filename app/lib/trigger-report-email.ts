@@ -37,6 +37,7 @@ export async function triggerReportEmail(sessionId: string): Promise<{ sent: boo
 
   const email = session.customer_details?.email || session.metadata?.email
   const plan = session.metadata?.planKey || 'quick-score'
+  const platform = session.metadata?.platform as string | undefined
 
   if (!email) {
     return { sent: false, reason: 'no_email' }
@@ -69,7 +70,7 @@ export async function triggerReportEmail(sessionId: string): Promise<{ sent: boo
     ? (cached.photoResults as Record<string, unknown>).overallPhotoScore as number | undefined
     : undefined
 
-  await sendReceiptEmail({ to: email, plan, sessionId, reportData, photoScore })
+  await sendReceiptEmail({ to: email, plan, sessionId, reportData, photoScore, platform })
 
   // Mark as sent in both memory and Supabase
   sentEmails.add(sessionId)

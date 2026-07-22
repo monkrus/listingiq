@@ -103,6 +103,23 @@ export async function getPmsReport(reportId: string): Promise<PmsReport | null> 
   return data as PmsReport
 }
 
+/** Get a report by Stripe session ID (for email re-access). */
+export async function getPmsReportBySession(sessionId: string): Promise<PmsReport | null> {
+  const db = getSupabaseAdmin()
+  if (!db) return null
+
+  const { data, error } = await db
+    .from('pms_reports')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (error || !data) return null
+  return data as PmsReport
+}
+
 /** Get reports for a specific property. */
 export async function getPropertyReports(connectionId: string, propertyId: string): Promise<PmsReport[]> {
   const db = getSupabaseAdmin()

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getPmsReports, getPmsReport } from '@/app/lib/pms-reports'
+import { getPmsReports, getPmsReport, getPmsReportBySession } from '@/app/lib/pms-reports'
 import { rateLimit } from '@/app/lib/rate-limit'
 
 /**
@@ -18,6 +18,16 @@ export async function GET(req: NextRequest) {
   const reportId = req.nextUrl.searchParams.get('reportId')
   if (reportId) {
     const report = await getPmsReport(reportId)
+    if (!report) {
+      return NextResponse.json({ error: 'Report not found' }, { status: 404 })
+    }
+    return NextResponse.json({ report })
+  }
+
+  // Lookup by Stripe session ID (email re-access)
+  const sessionId = req.nextUrl.searchParams.get('sessionId')
+  if (sessionId) {
+    const report = await getPmsReportBySession(sessionId)
     if (!report) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 })
     }
