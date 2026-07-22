@@ -49,9 +49,6 @@ export default function HospitablePage() {
   const [savedReports, setSavedReports] = useState<SavedReport[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [updatedPropertyIds, setUpdatedPropertyIds] = useState<Set<string>>(new Set())
-  const [lastReportId, setLastReportId] = useState<string | null>(null)
-  const [emailSending, setEmailSending] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
 
   // On mount: check URL params for connection status, session_id, or error
   useEffect(() => {
@@ -170,8 +167,6 @@ export default function HospitablePage() {
       }
 
       setReport(result.report as ReportData)
-      if (result.reportId) setLastReportId(result.reportId)
-
       // Run photo analysis if property has photo URLs and plan is full-audit
       if (result.photoUrls?.length && plan === 'full-audit') {
         try {
@@ -198,6 +193,18 @@ export default function HospitablePage() {
 
       setStep('report')
       fetchReports()
+
+      // Auto-send report email if user saved their email
+      if (result.reportId) {
+        const savedEmail = localStorage.getItem('pms_email_hospitable')
+        if (savedEmail) {
+          fetch('/api/integrations/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reportId: result.reportId, email: savedEmail }),
+          }).catch(() => {})
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed')
       setStep('properties')
@@ -239,24 +246,7 @@ export default function HospitablePage() {
   function viewSavedReport(sr: SavedReport) {
     setReport(sr.report_data as ReportData)
     setPhotoResults(null)
-    setLastReportId(sr.id)
-    setEmailSent(false)
     setStep('report')
-  }
-
-  async function handleEmailReport() {
-    const savedEmail = localStorage.getItem('pms_email_hospitable')
-    if (!savedEmail || !lastReportId) return
-    setEmailSending(true)
-    try {
-      const res = await fetch('/api/integrations/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId: lastReportId, email: savedEmail }),
-      })
-      if (res.ok) setEmailSent(true)
-    } catch { /* non-critical */ }
-    setEmailSending(false)
   }
 
   async function disconnect() {
@@ -285,7 +275,6 @@ export default function HospitablePage() {
 
   // Report view
   if (step === 'report' && report) {
-    const savedEmail = typeof window !== 'undefined' ? localStorage.getItem('pms_email_hospitable') : null
     return (
       <main className="min-h-screen py-12" style={{ background: '#F7F6F3' }}>
         <div className="max-w-2xl mx-auto px-4 mb-6 text-center">
@@ -310,32 +299,6 @@ export default function HospitablePage() {
           onUpgrade={() => {}}
           photoError={false}
         />
-        {/* Email report to self */}
-        {lastReportId && (
-          <div className="max-w-2xl mx-auto px-4">
-            <div className="bg-white border border-stone-200 rounded-2xl p-5 mb-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-stone-600">Email this report to yourself</p>
-                {savedEmail ? (
-                  emailSent ? (
-                    <span className="text-xs text-green-600 font-medium">Sent to {savedEmail}</span>
-                  ) : (
-                    <button
-                      onClick={handleEmailReport}
-                      disabled={emailSending}
-                      style={{ fontFamily: 'var(--font-syne)' }}
-                      className="px-4 py-2 bg-stone-900 text-white text-xs font-bold rounded-lg hover:bg-stone-700 transition-colors disabled:opacity-50"
-                    >
-                      {emailSending ? 'Sending...' : `Send to ${savedEmail}`}
-                    </button>
-                  )
-                ) : (
-                  <span className="text-xs text-stone-400">Save your email below first</span>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
       </main>
     )
   }
