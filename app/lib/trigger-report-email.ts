@@ -24,9 +24,9 @@ export async function triggerReportEmail(sessionId: string): Promise<{ sent: boo
       sentEmails.add(sessionId)
       return { sent: false, reason: 'already_sent' }
     }
-  } else if (!sentEmails.has(sessionId)) {
-    console.warn('[send-report-email] Supabase unavailable for dedup, skipping send')
-    return { sent: false, reason: 'dedup_unavailable' }
+  } else {
+    // Supabase unavailable — rely on in-memory dedup (best-effort)
+    console.warn('[send-report-email] Supabase unavailable — using in-memory dedup only')
   }
 
   // Retrieve email from Stripe session (also validates the session exists)

@@ -73,6 +73,7 @@ export default function HostexPage() {
   const [updatedPropertyIds, setUpdatedPropertyIds] = useState<Set<string>>(new Set())
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photoUploadId, setPhotoUploadId] = useState<string | null>(null)
+  const [isUpgrade, setIsUpgrade] = useState(false)
 
   // On mount: check URL params for session_id (return from Stripe)
   useEffect(() => {
@@ -280,6 +281,7 @@ export default function HostexPage() {
       }
 
       if (stepTimerRef.current) clearInterval(stepTimerRef.current)
+      setSelectedPlan(plan as 'quick-score' | 'full-audit')
       setStep('report')
       fetchReports()
 
@@ -330,7 +332,7 @@ export default function HostexPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Upload failed')
       setPhotoUploadId(data.uploadId)
-      goToCheckout(selectedPlan, data.uploadId)
+      goToCheckout(isUpgrade ? 'full-audit-upgrade' : selectedPlan, data.uploadId)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Photo upload failed')
       setStep('plan-select')
@@ -426,24 +428,10 @@ export default function HostexPage() {
           listingUrl=""
           initialPhotoResults={photoResults}
           initialPhotoPreviews={null}
-          onUpgrade={async () => {
-            if (!selectedId) return
-            try {
-              const res = await fetch('/api/integrations/checkout', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  plan: 'full-audit-upgrade',
-                  platform: 'hostex',
-                  propertyId: selectedId,
-                }),
-              })
-              const data = await res.json()
-              if (!res.ok) throw new Error(data.error || 'Checkout failed')
-              window.location.href = data.url
-            } catch (err) {
-              setError(err instanceof Error ? err.message : 'Upgrade checkout failed')
-            }
+          onUpgrade={() => {
+            setSelectedPlan('full-audit')
+            setIsUpgrade(true)
+            setStep('photos')
           }}
           photoError={false}
         />
@@ -567,7 +555,7 @@ export default function HostexPage() {
           {step === 'photos' && (
             <PhotoUploadStep
               onContinue={handlePhotosContinue}
-              onSkip={() => goToCheckout(selectedPlan)}
+              onSkip={() => goToCheckout(isUpgrade ? 'full-audit-upgrade' : selectedPlan)}
               uploading={photoUploading}
             />
           )}

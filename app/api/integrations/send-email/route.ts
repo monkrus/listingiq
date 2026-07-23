@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
       plan: report.plan,
       sessionId: report.session_id || reportId,
       reportData: report.report_data,
+      platform: report.platform,
     })
 
     return NextResponse.json({ sent: true })

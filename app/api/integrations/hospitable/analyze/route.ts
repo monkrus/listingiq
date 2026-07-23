@@ -149,20 +149,28 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Capture payment after successful analysis
+  const hasResults = results.some(r => !r.skipped)
+
+  // Capture payment only if at least one listing was actually analyzed
   if (sessionId && process.env.USE_MOCK_API !== 'true') {
     try {
       const payment = await verifyPayment(sessionId)
       if (payment.paymentIntentId && !payment.captured) {
-        await stripe.paymentIntents.capture(payment.paymentIntentId)
+        if (hasResults) {
+          await stripe.paymentIntents.capture(payment.paymentIntentId)
+        } else {
+          await stripe.paymentIntents.cancel(payment.paymentIntentId)
+          logger.warn('hospitable', 'payment_cancelled_all_skipped', { sessionId })
+        }
       }
     } catch (err) {
       logger.error('hospitable', 'capture_failed', { sessionId, error: String(err) })
     }
   }
 
-  // Send report email (fire-and-forget)
-  if (sessionId) {
+  // Send report email (fire-and-forget) — only if we have actual results
+  // For full-audit, let analyze-photos be the sole sender (avoids double-send race)
+  if (sessionId && hasResults && effectivePlan !== 'full-audit') {
     triggerReportEmail(sessionId).catch(err =>
       logger.error('hospitable', 'email_trigger_failed', { sessionId, error: String(err) })
     )
