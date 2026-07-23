@@ -73,7 +73,7 @@ export async function getPmsReports(connectionId: string, platform?: string): Pr
     .limit(50)
 
   if (platform) {
-    query = query.eq('platform', platform)
+    query = query.eq('platform', platform).eq('connection_id', connectionId)
   } else {
     query = query.eq('connection_id', connectionId)
   }

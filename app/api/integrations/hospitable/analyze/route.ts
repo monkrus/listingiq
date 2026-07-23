@@ -5,6 +5,7 @@ import { verifyPayment } from '@/app/lib/verify-payment'
 import { useAnalysisCredit } from '@/app/lib/session-usage'
 import { rateLimit, dailyRateLimit } from '@/app/lib/rate-limit'
 import { savePmsReport } from '@/app/lib/pms-reports'
+import { cacheReport } from '@/app/lib/supabase'
 import { logger } from '@/app/lib/logger'
 import { stripe } from '@/app/lib/stripe'
 import { triggerReportEmail } from '@/app/lib/trigger-report-email'
@@ -115,6 +116,12 @@ export async function POST(req: NextRequest) {
         reportData: report,
         overallScore: (report.overallScore as number) ?? 0,
       })
+
+      // Also create a cached_reports row so photo analysis, email dedup, and
+      // email photo scores work (they all operate on cached_reports)
+      if (sessionId) {
+        await cacheReport(sessionId, effectivePlan, `hospitable://${id}`, report)
+      }
 
       results.push({
         propertyId: id,

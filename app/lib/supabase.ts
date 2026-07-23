@@ -267,6 +267,23 @@ export async function saveHospitableTokens(
   const db = getSupabaseAdmin()
   if (!db) { console.warn('[db] Supabase not configured, skipping saveHospitableTokens'); return null }
   const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
+
+  // Reuse existing connection for the same refresh token (preserves report history across reconnects)
+  const { data: existing } = await db
+    .from('hospitable_connections')
+    .select('connection_id')
+    .eq('refresh_token', refreshToken)
+    .limit(1)
+    .single()
+  if (existing) {
+    // Update tokens on the existing connection
+    await db
+      .from('hospitable_connections')
+      .update({ access_token: accessToken, token_expires_at: expiresAt, updated_at: new Date().toISOString() })
+      .eq('connection_id', existing.connection_id)
+    return existing.connection_id
+  }
+
   const { data, error } = await db
     .from('hospitable_connections')
     .insert({ access_token: accessToken, refresh_token: refreshToken, token_expires_at: expiresAt })
@@ -318,6 +335,16 @@ export async function updateHospitableTokens(
 export async function saveHostexToken(accessToken: string): Promise<string | null> {
   const db = getSupabaseAdmin()
   if (!db) { console.warn('[db] Supabase not configured, skipping saveHostexToken'); return null }
+
+  // Reuse existing connection for the same token (preserves report history across reconnects)
+  const { data: existing } = await db
+    .from('hostex_connections')
+    .select('connection_id')
+    .eq('access_token', accessToken)
+    .limit(1)
+    .single()
+  if (existing) return existing.connection_id
+
   const { data, error } = await db
     .from('hostex_connections')
     .insert({ access_token: accessToken })

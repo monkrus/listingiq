@@ -1,6 +1,7 @@
 import { stripe } from '@/app/lib/stripe'
 import { sendReceiptEmail } from '@/app/lib/email'
 import { markEmailSent, isEmailSent, getCachedReportBySession, getSupabaseAdmin } from '@/app/lib/supabase'
+import { getPmsReportBySession } from '@/app/lib/pms-reports'
 
 // In-memory dedup (fast path — survives within a single process lifetime)
 const sentEmails = new Set<string>()
@@ -44,8 +45,17 @@ export async function triggerReportEmail(sessionId: string): Promise<{ sent: boo
   }
 
   // Fetch cached report to include content in the email
+  // Main app stores in cached_reports; PMS integrations store in pms_reports
   const cached = await getCachedReportBySession(sessionId)
-  const reportData = cached?.reportData as Record<string, unknown> | undefined
+  let reportData = cached?.reportData as Record<string, unknown> | undefined
+
+  // Fallback: PMS reports are stored in pms_reports table, not cached_reports
+  if (!reportData && platform) {
+    const pmsReport = await getPmsReportBySession(sessionId)
+    if (pmsReport) {
+      reportData = pmsReport.report_data as Record<string, unknown>
+    }
+  }
 
   // For Full Audit, recalculate overall score with photo weighting to match the web report
   if (reportData && plan === 'full-audit' && cached?.photoResults) {
