@@ -136,3 +136,25 @@ export async function getPropertyReports(connectionId: string, propertyId: strin
   if (error) return []
   return (data || []) as PmsReport[]
 }
+
+/** Find an existing connection_id that has reports for any of the given property IDs.
+ *  Used to link a new OAuth connection to an existing one (preserves history on reconnect). */
+export async function findConnectionByPropertyIds(
+  platform: string,
+  propertyIds: string[]
+): Promise<string | null> {
+  const db = getSupabaseAdmin()
+  if (!db || propertyIds.length === 0) return null
+
+  const { data, error } = await db
+    .from('pms_reports')
+    .select('connection_id')
+    .eq('platform', platform)
+    .in('property_id', propertyIds)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (error || !data) return null
+  return data.connection_id
+}

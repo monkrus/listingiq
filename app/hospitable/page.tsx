@@ -99,9 +99,25 @@ export default function HospitablePage() {
     const plan = params.get('plan')
     if (sessionId && propertyId) {
       setConnected(true)
+      const effectivePlan = (plan === 'full-audit' ? 'full-audit' : 'quick-score') as 'quick-score' | 'full-audit'
+      setSelectedPlan(effectivePlan)
       window.history.replaceState({}, '', '/hospitable')
-      // Trigger analysis with payment session
-      runAnalysis(propertyId, sessionId, plan || 'quick-score')
+
+      // Check if report already exists (handles browser back button / page refresh)
+      fetch(`/api/integrations/reports?sessionId=${encodeURIComponent(sessionId)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.report) {
+            setReport(data.report.report_data as ReportData)
+            setSelectedPlan((data.report.plan || effectivePlan) as 'quick-score' | 'full-audit')
+            setStep('report')
+          } else {
+            runAnalysis(propertyId, sessionId, effectivePlan)
+          }
+        })
+        .catch(() => {
+          runAnalysis(propertyId, sessionId, effectivePlan)
+        })
       return
     }
 

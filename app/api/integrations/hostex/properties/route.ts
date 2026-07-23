@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
       missing: readiness.missing,
     }))
 
-    return NextResponse.json({ properties })
+    return NextResponse.json({ properties: properties.slice(0, 100), total: properties.length })
   } catch (err) {
     console.error('[hostex] Failed to fetch listings:', err)
     const msg = err instanceof Error ? err.message : 'Unknown error'

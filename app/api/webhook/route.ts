@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/app/lib/stripe'
 import { getSupabaseAdmin } from '@/app/lib/supabase'
 import { registerPaidSession } from '@/app/lib/session-usage'
+import { triggerReportEmail } from '@/app/lib/trigger-report-email'
 import Stripe from 'stripe'
 
 export const runtime = 'nodejs'
@@ -33,8 +34,6 @@ export async function POST(req: NextRequest) {
         const planKey = session.metadata?.planKey || 'quick-score'
         // Register the session in our usage tracker so the API routes can validate it
         registerPaidSession(session.id, planKey)
-        // Email is sent later by the client after the report is fully cached
-        // (via /api/send-report-email) to avoid sending before the report exists
 
         // Add credits if Supabase is configured and we can identify the user
         const db = getSupabaseAdmin()
@@ -44,6 +43,16 @@ export async function POST(req: NextRequest) {
           const credits = creditMap[planKey] ?? 1
           await db.rpc('add_credits', { uid: userId, amount: credits })
         }
+
+        // Safety-net email: if the user closed the browser before redirect,
+        // the analyze route never fired triggerReportEmail. The dedup inside
+        // triggerReportEmail prevents double-sends if it already ran.
+        // Delay slightly so the analyze route has time to save the report first.
+        setTimeout(() => {
+          triggerReportEmail(session.id).catch(err =>
+            console.warn('[webhook] Safety-net email failed:', err)
+          )
+        }, 15_000) // 15s delay — gives analyze route time to complete
         break
       }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { saveHospitableTokens } from '@/app/lib/supabase'
+import { findConnectionByPropertyIds } from '@/app/lib/pms-reports'
 
 /**
  * Hospitable OAuth callback handler.
@@ -70,11 +71,29 @@ export async function GET(req: NextRequest) {
 
   const tokens = await tokenRes.json()
 
-  // Store tokens in Supabase
+  // Try to find an existing connection by checking which properties this account has
+  // (preserves report history across disconnect/reconnect even when tokens rotate)
+  let reuseConnectionId: string | undefined
+  try {
+    const propRes = await fetch('https://public.api.hospitable.com/v2/properties?per_page=5', {
+      headers: { Authorization: `Bearer ${tokens.access_token}`, Accept: 'application/json' },
+    })
+    if (propRes.ok) {
+      const propData = await propRes.json()
+      const propertyIds = (propData?.data || []).map((p: { id: string }) => String(p.id)).filter(Boolean)
+      const existingConnId = await findConnectionByPropertyIds('hospitable', propertyIds)
+      if (existingConnId) reuseConnectionId = existingConnId
+    }
+  } catch {
+    // Best-effort — continue with new connection if lookup fails
+  }
+
+  // Store tokens in Supabase (reuse existing connection if found)
   const connectionId = await saveHospitableTokens(
     tokens.access_token,
     tokens.refresh_token,
-    tokens.expires_in || 3600
+    tokens.expires_in || 3600,
+    reuseConnectionId
   )
 
   if (!connectionId) {

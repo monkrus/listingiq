@@ -88,7 +88,22 @@ export default function HostexPage() {
       const effectivePlan = (plan === 'full-audit' ? 'full-audit' : 'quick-score') as 'quick-score' | 'full-audit'
       setSelectedPlan(effectivePlan)
       window.history.replaceState({}, '', '/hostex')
-      runAnalysis(propertyId, sessionId, effectivePlan)
+
+      // Check if report already exists (handles browser back button / page refresh)
+      fetch(`/api/integrations/reports?sessionId=${encodeURIComponent(sessionId)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.report) {
+            setReport(data.report.report_data as ReportData)
+            setSelectedPlan((data.report.plan || effectivePlan) as 'quick-score' | 'full-audit')
+            setStep('report')
+          } else {
+            runAnalysis(propertyId, sessionId, effectivePlan)
+          }
+        })
+        .catch(() => {
+          runAnalysis(propertyId, sessionId, effectivePlan)
+        })
       return
     }
 

@@ -262,26 +262,27 @@ export interface HospitableConnection {
 export async function saveHospitableTokens(
   accessToken: string,
   refreshToken: string,
-  expiresIn: number
+  expiresIn: number,
+  reuseConnectionId?: string
 ): Promise<string | null> {
   const db = getSupabaseAdmin()
   if (!db) { console.warn('[db] Supabase not configured, skipping saveHospitableTokens'); return null }
   const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString()
 
-  // Reuse existing connection for the same refresh token (preserves report history across reconnects)
-  const { data: existing } = await db
-    .from('hospitable_connections')
-    .select('connection_id')
-    .eq('refresh_token', refreshToken)
-    .limit(1)
-    .single()
-  if (existing) {
-    // Update tokens on the existing connection
-    await db
+  // If caller found an existing connection (via property-based dedup), update its tokens
+  if (reuseConnectionId) {
+    const { data: existing } = await db
       .from('hospitable_connections')
-      .update({ access_token: accessToken, token_expires_at: expiresAt, updated_at: new Date().toISOString() })
-      .eq('connection_id', existing.connection_id)
-    return existing.connection_id
+      .select('connection_id')
+      .eq('connection_id', reuseConnectionId)
+      .single()
+    if (existing) {
+      await db
+        .from('hospitable_connections')
+        .update({ access_token: accessToken, refresh_token: refreshToken, token_expires_at: expiresAt, updated_at: new Date().toISOString() })
+        .eq('connection_id', reuseConnectionId)
+      return reuseConnectionId
+    }
   }
 
   const { data, error } = await db

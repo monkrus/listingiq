@@ -143,7 +143,17 @@ export async function POST(req: NextRequest) {
         })
         continue
       }
-      throw err
+      // Unexpected error — cancel payment and surface to user
+      if (sessionId && process.env.USE_MOCK_API !== 'true') {
+        try {
+          const payment = await verifyPayment(sessionId)
+          if (payment.paymentIntentId && !payment.captured) {
+            await stripe.paymentIntents.cancel(payment.paymentIntentId)
+          }
+        } catch { /* best effort */ }
+      }
+      logger.error('hostex', 'analysis_failed', { listingId: id, error: String(err) })
+      return NextResponse.json({ error: 'Analysis failed. Your payment was not charged. Please try again.' }, { status: 500 })
     }
   }
 
