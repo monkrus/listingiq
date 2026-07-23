@@ -4,6 +4,8 @@ import { checkOrigin } from '@/app/lib/check-origin'
 import { storePhotos } from '@/app/lib/photo-store'
 import { validateImageFile } from '@/app/lib/validate-image'
 
+export const runtime = 'nodejs'
+
 export async function POST(req: NextRequest) {
   try {
     const originBlock = checkOrigin(req)
