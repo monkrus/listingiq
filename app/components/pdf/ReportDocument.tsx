@@ -91,10 +91,10 @@ const s = StyleSheet.create({
   priorityText: { fontSize: 9, color: C.amberText, flex: 1, lineHeight: 1.4 },
   sectionCard: { backgroundColor: C.white, border: `1pt solid ${C.border}`, borderRadius: 10, marginBottom: 8, minPresenceAhead: 30 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 10, borderBottom: '1pt solid #f5f5f4', minPresenceAhead: 30 },
-  sectionTitle: { fontFamily: 'Syne', fontSize: 10, fontWeight: 700, color: C.brand },
-  scorePill: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2 },
+  sectionTitle: { fontFamily: 'Syne', fontSize: 10, fontWeight: 700, color: C.brand, flex: 1, marginRight: 8 },
+  scorePill: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 2, flexShrink: 0 },
   scorePillText: { fontSize: 7, fontWeight: 500 },
-  sectionBody: { padding: 14 },
+  sectionBody: { padding: 14, paddingTop: 10 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8 },
   problemTag: { backgroundColor: '#fef2f2', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 },
   problemTagText: { fontSize: 7, color: '#991b1b' },
@@ -382,7 +382,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
 
           {/* Guest persona */}
           <SectionCard title="Guest persona match" score={d.personaScore}>
-            <View style={{ marginBottom: 10 }} wrap={false}>
+            <View style={{ marginBottom: 10 }}>
               <Text style={[s.rowItemText, { lineHeight: 1.6 }]}>
                 Primary guest type: <Text style={s.boldText}>{d.primaryPersona}</Text>
               </Text>
@@ -419,9 +419,9 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
             <View style={s.sectionBody}>
             <Text style={s.subLabel}>Phrases your target guests search for</Text>
             <ChipTags items={d.seoKeywords} />
-            <Text style={[s.rowItemText, { fontSize: 7, color: C.muted, lineHeight: 1.5, marginBottom: 6 }]}>These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</Text>
+            <Text style={[s.rowItemText, { fontSize: 7, color: C.muted, lineHeight: 1.5, marginBottom: 12 }]}>These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</Text>
             <View minPresenceAhead={80}>
-              <Text style={s.subLabel}>Listing optimization tips</Text>
+              <Text style={[s.subLabel, { marginTop: 0 }]}>Listing optimization tips</Text>
               <RowItems items={d.conversionTips} dotColor={C.green} />
             </View>
             </View>
