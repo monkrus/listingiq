@@ -101,7 +101,12 @@ function mapHostexListingToInput(
   const picList = m.house_picture_list ?? m.photos
   if (Array.isArray(picList)) {
     for (const p of picList) {
-      const url = typeof p === 'string' ? p : p?.original_url ?? p?.url
+      let url = typeof p === 'string' ? p : p?.original_url ?? p?.url
+      // Remap Chinese CDN (muscache.cn) to international CDN (muscache.com)
+      // Same images, same paths — but .cn may not be accessible from US servers
+      if (url && typeof url === 'string') {
+        url = url.replace(/\/\/z\d\.muscache\.cn\//g, '//a0.muscache.com/')
+      }
       if (url && !photoUrls.includes(url)) photoUrls.push(url)
     }
   }
