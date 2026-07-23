@@ -271,8 +271,14 @@ export async function POST(req: NextRequest) {
       const filenames = storedPhotos
         ? storedPhotos.map(p => p.filename)
         : files.map(f => f.name)
+      const mockResult = buildMockResult(filenames)
+      // Include base64 previews so PhotoUploader can display thumbnails
+      let previews: string[] | undefined
+      if (storedPhotos) {
+        previews = storedPhotos.map(p => `data:${p.mediaType};base64,${p.base64}`)
+      }
       if (uploadId) deletePhotos(uploadId)
-      return NextResponse.json(buildMockResult(filenames))
+      return NextResponse.json(previews ? { ...mockResult, previews } : mockResult)
     }
 
     // Build labeled contents for AI analysis

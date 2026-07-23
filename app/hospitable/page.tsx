@@ -63,6 +63,7 @@ export default function HospitablePage() {
   const [selectedPlan, setSelectedPlan] = useState<'quick-score' | 'full-audit'>('quick-score')
   const [report, setReport] = useState<ReportData | null>(null)
   const [photoResults, setPhotoResults] = useState<PhotoAnalysisResult | null>(null)
+  const [photoPreviews, setPhotoPreviews] = useState<string[] | null>(null)
   const [analyzingTitle, setAnalyzingTitle] = useState('')
   const [stepIndex, setStepIndex] = useState(-1)
   const stepTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -269,6 +270,7 @@ export default function HospitablePage() {
           if (photoRes?.ok) {
             const photoData = await photoRes.json()
             setPhotoResults(photoData)
+            if (photoData.previews) setPhotoPreviews(photoData.previews)
           }
         } catch (photoErr) {
           console.warn('[hospitable] Photo analysis failed:', photoErr)
@@ -339,6 +341,9 @@ export default function HospitablePage() {
   async function goToCheckout(plan: string, uploadId?: string) {
     if (!selectedId) return
 
+    // Save uploadId so it's available after Stripe redirect or mock analysis
+    if (uploadId) localStorage.setItem('listingiq_pms_upload_id', uploadId)
+
     if (process.env.NEXT_PUBLIC_USE_MOCK_API === 'true') {
       runAnalysis(selectedId, '', plan)
       return
@@ -356,8 +361,6 @@ export default function HospitablePage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Checkout failed')
-
-      if (uploadId) localStorage.setItem('listingiq_pms_upload_id', uploadId)
 
       window.location.href = data.url
     } catch (err) {
@@ -418,7 +421,7 @@ export default function HospitablePage() {
           isDemo={false}
           listingUrl=""
           initialPhotoResults={photoResults}
-          initialPhotoPreviews={null}
+          initialPhotoPreviews={photoPreviews}
           onUpgrade={() => {
             setSelectedPlan('full-audit')
             setIsUpgrade(true)
