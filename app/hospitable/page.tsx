@@ -553,6 +553,19 @@ export default function HospitablePage() {
                       {showHistory ? 'Hide history' : `History (${savedReports.length})`}
                     </button>
                   )}
+                  {showHistory && savedReports.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Clear all report history?')) return
+                        await fetch('/api/integrations/reports?platform=hospitable', { method: 'DELETE' })
+                        setSavedReports([])
+                        setShowHistory(false)
+                      }}
+                      className="text-xs text-red-400 hover:text-red-600 underline"
+                    >
+                      Clear history
+                    </button>
+                  )}
                   <button
                     onClick={disconnect}
                     className="text-xs text-stone-400 hover:text-red-500 underline"

@@ -137,6 +137,28 @@ export async function getPropertyReports(connectionId: string, propertyId: strin
   return (data || []) as PmsReport[]
 }
 
+/** Delete all reports for a connection. */
+export async function clearPmsReports(connectionId: string, platform?: string): Promise<boolean> {
+  const db = getSupabaseAdmin()
+  if (!db) return false
+
+  let query = db
+    .from('pms_reports')
+    .delete()
+    .eq('connection_id', connectionId)
+
+  if (platform) {
+    query = query.eq('platform', platform)
+  }
+
+  const { error } = await query
+  if (error) {
+    logger.error(platform || 'pms', 'clear_reports_failed', { error: error.message, connectionId })
+    return false
+  }
+  return true
+}
+
 /** Find an existing connection_id that has reports for any of the given property IDs.
  *  Used to link a new OAuth connection to an existing one (preserves history on reconnect). */
 export async function findConnectionByPropertyIds(
