@@ -7,11 +7,11 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: version,
   },
-  serverActions: {
-    bodySizeLimit: '25mb',
-  },
   experimental: {
     middlewareClientMaxBodySize: '25mb',
+    serverActions: {
+      bodySizeLimit: '25mb',
+    },
   },
   async headers() {
     return [
