@@ -9,6 +9,7 @@ import PhotoUploadStep from './components/PhotoUploadStep'
 import { PhotoAnalysisResult } from './api/analyze-photos/route'
 import { savePendingPhotos, getPendingPhotos } from './lib/photo-db'
 import { usePhotoAnalysis } from './lib/use-photo-analysis'
+import { compressAllForUpload } from './lib/compress-for-upload'
 import Logo from './components/Logo'
 
 const LOADING_STEPS = [
@@ -358,9 +359,10 @@ export default function Home() {
       // Save photos to IndexedDB so they survive the Stripe redirect
       await savePendingPhotos(files)
 
-      // Also upload to server as primary path
+      // Compress and upload to server as primary path
+      const compressed = await compressAllForUpload(files)
       const form = new FormData()
-      files.forEach(f => form.append('photos', f))
+      compressed.forEach(f => form.append('photos', f))
       const res = await fetch('/api/upload-photos', { method: 'POST', body: form })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Upload failed')
