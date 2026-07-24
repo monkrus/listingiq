@@ -316,7 +316,7 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       <ReportSection title="Guest persona match" score={d.personaScore} defaultOpen>
         <div className="mt-3">
           <p className="text-sm mb-3">Primary guest type: <strong>{d.primaryPersona}</strong></p>
-          <div className="mb-3">{d.personaProblems.map((p, i) => <ProblemTag key={i} text={p} />)}</div>
+          <div className="mb-3">{d.personaProblems.map((p, i) => <RowItem key={i} text={p} color="red" />)}</div>
           <SuggestionBox text={d.personaSuggestion} />
         </div>
       </ReportSection>
