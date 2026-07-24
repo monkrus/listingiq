@@ -22,6 +22,17 @@ export interface AnalyzePhotosSuccess {
   previews: string[] | null
 }
 
+/** Fetch with one automatic retry on 502 (transient Claude API failures). */
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  const res = await fetch(url, init)
+  if (res.status === 502) {
+    console.warn('[photo-analysis] Got 502, retrying in 3s...')
+    await new Promise(r => setTimeout(r, 3000))
+    return fetch(url, init)
+  }
+  return res
+}
+
 /**
  * Shared hook for photo analysis across main app and PMS integrations.
  * Handles the three-priority photo source chain:
@@ -48,7 +59,7 @@ export function usePhotoAnalysis() {
 
       // Priority 1: server-side upload store
       if (input.uploadId) {
-        photoRes = await fetch('/api/analyze-photos', {
+        photoRes = await fetchWithRetry('/api/analyze-photos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -74,7 +85,7 @@ export function usePhotoAnalysis() {
             form.append('listingContext', JSON.stringify(input.listingContext))
             form.append('listingUrl', cacheInfo.listingUrl)
             form.append('plan', cacheInfo.plan)
-            photoRes = await fetch('/api/analyze-photos', { method: 'POST', body: form })
+            photoRes = await fetchWithRetry('/api/analyze-photos', { method: 'POST', body: form })
           }
         } catch (e) {
           console.warn('[photo-analysis] IndexedDB fallback failed:', e)
@@ -83,7 +94,7 @@ export function usePhotoAnalysis() {
 
       // Priority 3: listing photos from scraper/adapter
       if (!photoRes && input.photoUrls?.length) {
-        photoRes = await fetch('/api/analyze-photos', {
+        photoRes = await fetchWithRetry('/api/analyze-photos', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -97,13 +108,20 @@ export function usePhotoAnalysis() {
       }
 
       if (photoRes) {
-        const photoData = await photoRes.json()
+        let photoData: Record<string, unknown>
+        try {
+          photoData = await photoRes.json()
+        } catch {
+          console.warn('[photo-analysis] Non-JSON response, status:', photoRes.status)
+          setPhotoError(true)
+          return null
+        }
         if (photoRes.ok) {
-          setPhotoResults(photoData)
+          setPhotoResults(photoData as unknown as PhotoAnalysisResult)
           let previews: string[] | null = null
           if (photoData.previews) {
-            previews = photoData.previews
-            setPhotoPreviews(photoData.previews)
+            previews = photoData.previews as string[]
+            setPhotoPreviews(photoData.previews as string[])
           } else if (input.indexedDbFallback) {
             // Generate previews from IndexedDB files (FormData uploads don't return previews)
             try {
@@ -128,9 +146,10 @@ export function usePhotoAnalysis() {
               clearPendingPhotos()
             } catch { /* IndexedDB unavailable */ }
           }
-          return { results: photoData as PhotoAnalysisResult, previews }
+          return { results: photoData as unknown as PhotoAnalysisResult, previews }
         } else {
-          console.warn('[photo-analysis] Failed:', photoData.error)
+          const errMsg = (photoData.error || photoData.message || `Server error ${photoRes.status}`) as string
+          console.warn('[photo-analysis] Failed:', errMsg)
           setPhotoError(true)
           return null
         }
