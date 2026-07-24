@@ -350,8 +350,10 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
         <div className="mt-3">
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Phrases your target guests search for</p>
           <div className="mb-3 flex flex-wrap gap-1.5">{d.seoKeywords.map((k, i) => <Chip key={i} text={k} />)}</div>
-          <p className="text-[11px] text-stone-600 mb-3 leading-relaxed">These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</p>
-          <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Listing optimization tips</p>
+          <p className="text-xs text-stone-500 mb-4 leading-relaxed">These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</p>
+          <div className="border-t border-stone-100 pt-4">
+            <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Listing optimization tips</p>
+          </div>
           {d.conversionTips.map((t, i) => <RowItem key={i} text={t} color="green" />)}
         </div>
       </ReportSection>
