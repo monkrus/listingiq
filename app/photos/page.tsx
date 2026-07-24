@@ -17,7 +17,11 @@ export default function PhotosPage() {
           Upload your listing photos. Claude Vision scores each one, flags what to retake,<br />
           and tells you exactly how to reshoot it.
         </p>
-        <div className="flex justify-center gap-4 mt-5 text-xs text-stone-600">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mt-5 text-xs text-amber-700 max-w-md mx-auto">
+          Photo analysis requires a <Link href="/pricing" className="underline font-medium">Full Audit ($49)</Link> purchase.
+          If you haven&apos;t paid yet, your analysis will not run.
+        </div>
+        <div className="flex justify-center gap-4 mt-4 text-xs text-stone-600">
           <Link href="/" className="hover:text-stone-600 underline">← Back to listing analyzer</Link>
           <span>·</span>
           <Link href="/pricing" className="hover:text-stone-600 underline">Pricing</Link>

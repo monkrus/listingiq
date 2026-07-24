@@ -32,8 +32,6 @@ const ALLOWED_PHOTO_HOSTS = [
   'a0.muscache.com',
   'a1.muscache.com',
   'a2.muscache.com',
-  'z1.muscache.cn',
-  'z2.muscache.cn',
 ]
 
 /**

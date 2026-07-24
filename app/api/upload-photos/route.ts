@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Maximum 10 photos' }, { status: 400 })
     }
 
-    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
     const MAX_FILE_SIZE = 4 * 1024 * 1024
     const MAX_TOTAL_SIZE = 20 * 1024 * 1024
     let totalSize = 0
