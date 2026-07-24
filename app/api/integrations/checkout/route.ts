@@ -9,7 +9,7 @@ import { stripe, PLANS } from '@/app/lib/stripe'
  * After payment, redirects back to /{platform}?session_id=XXX&propertyId=YYY
  */
 export async function POST(req: NextRequest) {
-  const { plan, platform, propertyId } = await req.json()
+  const { plan, platform, propertyId, uploadId } = await req.json()
 
   if (!plan || !platform || !propertyId) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -49,13 +49,14 @@ export async function POST(req: NextRequest) {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{ price: planConfig.priceId, quantity: 1 }],
-      success_url: `${origin}/${platform}?session_id={CHECKOUT_SESSION_ID}&plan=${effectivePlan}&propertyId=${encodeURIComponent(propertyId)}`,
+      success_url: `${origin}/${platform}?session_id={CHECKOUT_SESSION_ID}&plan=${effectivePlan}&propertyId=${encodeURIComponent(propertyId)}${uploadId ? `&uploadId=${encodeURIComponent(uploadId)}` : ''}`,
       cancel_url: `${origin}/${platform}`,
       metadata: {
         planKey: effectivePlan,
         platform,
         connectionId,
         propertyId,
+        ...(uploadId ? { photoUploadId: uploadId } : {}),
       },
       allow_promotion_codes: true,
       payment_intent_data: { capture_method: 'manual' },

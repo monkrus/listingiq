@@ -287,6 +287,8 @@ export async function POST(req: NextRequest) {
 
     // Collect base64 data URIs for PDF previews (CDN URLs fail due to CORS)
     const listingPhotoPreviews: string[] = []
+    // Collect resized previews for stored photos (avoid sending originals at up to 4MB each)
+    const storedPhotoPreviews: string[] = []
 
     if (photoUrls.length) {
       // From scraped listing URLs — download and convert to base64.
@@ -335,12 +337,14 @@ export async function POST(req: NextRequest) {
           continue
         }
         const resized = await resizeForVision(Buffer.from(p.base64, 'base64'))
+        const resizedBase64 = resized.buffer.toString('base64')
         labeledContents.push({ type: 'text', text: `[Photo ${i + 1}: ${p.filename}]` })
         labeledContents.push({
           type: 'image',
-          source: { type: 'base64', media_type: resized.mediaType, data: resized.buffer.toString('base64') },
+          source: { type: 'base64', media_type: resized.mediaType, data: resizedBase64 },
         })
         filenames.push(p.filename)
+        storedPhotoPreviews.push(`data:${resized.mediaType};base64,${resizedBase64}`)
       }
     } else {
       // From direct file upload — validate magic bytes + resize
@@ -476,9 +480,8 @@ Evaluate each photo's quality, classify its room type, give a keep/retake verdic
     let responseData: Record<string, unknown> = { ...result }
     if (listingPhotoPreviews.length) {
       responseData = { ...result, previews: listingPhotoPreviews }
-    } else if (storedPhotos) {
-      const previews = storedPhotos.map(p => `data:${p.mediaType};base64,${p.base64}`)
-      responseData = { ...result, previews }
+    } else if (storedPhotoPreviews.length) {
+      responseData = { ...result, previews: storedPhotoPreviews }
     }
 
     // Update LRU cache so subsequent cache hits include photo results

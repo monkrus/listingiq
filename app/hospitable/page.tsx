@@ -3,8 +3,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import Logo from '../components/Logo'
 import Report from '../components/Report'
 import { ReportData } from '../lib/types'
-import { PhotoAnalysisResult } from '../api/analyze-photos/route'
 import PhotoUploadStep from '../components/PhotoUploadStep'
+import { usePhotoAnalysis } from '../lib/use-photo-analysis'
 
 const LOADING_STEPS = [
   'Reading listing details...',
@@ -62,8 +62,7 @@ export default function HospitablePage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedPlan, setSelectedPlan] = useState<'quick-score' | 'full-audit'>('quick-score')
   const [report, setReport] = useState<ReportData | null>(null)
-  const [photoResults, setPhotoResults] = useState<PhotoAnalysisResult | null>(null)
-  const [photoPreviews, setPhotoPreviews] = useState<string[] | null>(null)
+  const { photoResults, photoPreviews, photoError, analyzePhotos, resetPhotoState } = usePhotoAnalysis()
   const [analyzingTitle, setAnalyzingTitle] = useState('')
   const [stepIndex, setStepIndex] = useState(-1)
   const stepTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -98,10 +97,12 @@ export default function HospitablePage() {
     const sessionId = params.get('session_id')
     const propertyId = params.get('propertyId')
     const plan = params.get('plan')
+    const uploadIdParam = params.get('uploadId')
     if (sessionId && propertyId) {
       setConnected(true)
       const effectivePlan = (plan === 'full-audit' ? 'full-audit' : 'quick-score') as 'quick-score' | 'full-audit'
       setSelectedPlan(effectivePlan)
+      if (uploadIdParam) setPhotoUploadId(uploadIdParam)
       window.history.replaceState({}, '', '/hospitable')
 
       // Check if report already exists (handles browser back button / page refresh)
@@ -203,6 +204,7 @@ export default function HospitablePage() {
     setAnalyzingTitle(prop?.title || 'Property')
     setStep('analyzing')
     setError('')
+    resetPhotoState()
 
     // Start animated loading steps
     const steps = plan === 'full-audit' ? LOADING_STEPS_WITH_PHOTOS : LOADING_STEPS
@@ -242,39 +244,18 @@ export default function HospitablePage() {
       setReport(result.report as ReportData)
       // Photo analysis for Full Audit
       if (plan === 'full-audit') {
-        const listingContext = {
-          title: result.listing?.title || '',
-          amenities: result.listing?.amenities || [],
-          missingPhotos: result.report?.missingPhotos || [],
-        }
-        try {
-          let photoRes: Response | null = null
-          // Priority 1: user-uploaded photos
-          const savedUploadId = photoUploadId || localStorage.getItem('listingiq_pms_upload_id')
-          if (savedUploadId) {
-            photoRes = await fetch('/api/analyze-photos', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ uploadId: savedUploadId, sessionId, listingContext }),
-            })
-            localStorage.removeItem('listingiq_pms_upload_id')
-          }
-          // Priority 2: listing photos from adapter
-          if (!photoRes && result.photoUrls?.length) {
-            photoRes = await fetch('/api/analyze-photos', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ photoUrls: result.photoUrls.slice(0, 10), sessionId, listingContext }),
-            })
-          }
-          if (photoRes?.ok) {
-            const photoData = await photoRes.json()
-            setPhotoResults(photoData)
-            if (photoData.previews) setPhotoPreviews(photoData.previews)
-          }
-        } catch (photoErr) {
-          console.warn('[hospitable] Photo analysis failed:', photoErr)
-        }
+        const savedUploadId = photoUploadId || localStorage.getItem('listingiq_pms_upload_id')
+        await analyzePhotos({
+          sessionId,
+          uploadId: savedUploadId,
+          photoUrls: result.photoUrls?.slice(0, 10),
+          listingContext: {
+            title: result.listing?.title || '',
+            amenities: result.listing?.amenities || [],
+            missingPhotos: result.report?.missingPhotos || [],
+          },
+        })
+        if (savedUploadId) localStorage.removeItem('listingiq_pms_upload_id')
       }
 
       if (stepTimerRef.current) clearInterval(stepTimerRef.current)
@@ -357,6 +338,7 @@ export default function HospitablePage() {
           plan,
           platform: 'hospitable',
           propertyId: selectedId,
+          ...(uploadId ? { uploadId } : {}),
         }),
       })
       const data = await res.json()
@@ -371,7 +353,7 @@ export default function HospitablePage() {
 
   function viewSavedReport(sr: SavedReport) {
     setReport(sr.report_data as ReportData)
-    setPhotoResults(null)
+    resetPhotoState()
     setStep('report')
   }
 
@@ -388,7 +370,7 @@ export default function HospitablePage() {
 
   function backToProperties() {
     setReport(null)
-    setPhotoResults(null)
+    resetPhotoState()
     setSelectedId(null)
     setStep('properties')
   }
@@ -427,7 +409,7 @@ export default function HospitablePage() {
             setIsUpgrade(true)
             setStep('photos')
           }}
-          photoError={false}
+          photoError={photoError}
         />
       </main>
     )

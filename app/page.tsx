@@ -7,7 +7,8 @@ import Report from './components/Report'
 import { APP_VERSION } from './lib/version'
 import PhotoUploadStep from './components/PhotoUploadStep'
 import { PhotoAnalysisResult } from './api/analyze-photos/route'
-import { savePendingPhotos, getPendingPhotos, clearPendingPhotos } from './lib/photo-db'
+import { savePendingPhotos, getPendingPhotos } from './lib/photo-db'
+import { usePhotoAnalysis } from './lib/use-photo-analysis'
 import Logo from './components/Logo'
 
 const LOADING_STEPS = [
@@ -45,9 +46,7 @@ export default function Home() {
   const [selectedPlan, setSelectedPlan] = useState<string>('full-audit')
   const [photoUploadId, setPhotoUploadId] = useState<string | null>(null)
   const [photoUploading, setPhotoUploading] = useState(false)
-  const [initialPhotoResults, setInitialPhotoResults] = useState<PhotoAnalysisResult | null>(null)
-  const [initialPhotoPreviews, setInitialPhotoPreviews] = useState<string[] | null>(null)
-  const [photoError, setPhotoError] = useState(false)
+  const { photoResults, photoPreviews, photoError, analyzePhotos, setCachedResults, resetPhotoState } = usePhotoAnalysis()
   // Hydrating: true while useEffect resolves a returning user (email re-access or saved report).
   // Prevents the input form from flashing for 1-2s before the report renders.
   const [hydrating, setHydrating] = useState<boolean>(() => {
@@ -113,8 +112,7 @@ export default function Home() {
               const cachedUrl = cacheData.listingUrl || cacheData.reportData?.listingUrl || ''
               if (cachedUrl) setUrl(cachedUrl)
               if (cacheData.photoResults) {
-                setInitialPhotoResults(cacheData.photoResults)
-                if (cacheData.photoPreviews) setInitialPhotoPreviews(cacheData.photoPreviews)
+                setCachedResults(cacheData.photoResults, cacheData.photoPreviews)
                 // Safety net: send email if original tab closed before it was sent
                 sendReportEmail(sid)
               } else {
@@ -175,8 +173,7 @@ export default function Home() {
       setReport(DEMO_REPORT as ReportData)
       setStep('report')
       if (demoPlan === 'full-audit') {
-        setInitialPhotoResults(DEMO_PHOTO_RESULT)
-        setInitialPhotoPreviews(DEMO_PHOTO_PREVIEWS)
+        setCachedResults(DEMO_PHOTO_RESULT, DEMO_PHOTO_PREVIEWS)
       }
       finishHydrating()
       return
@@ -202,9 +199,8 @@ export default function Home() {
         const savedPlan = localStorage.getItem('listingiq_plan')
         if (savedPlan) setActivePlan(savedPlan)
         const savedPhotos = localStorage.getItem('listingiq_photo_results')
-        if (savedPhotos) setInitialPhotoResults(JSON.parse(savedPhotos))
         const savedPreviews = localStorage.getItem('listingiq_photo_previews')
-        if (savedPreviews) setInitialPhotoPreviews(JSON.parse(savedPreviews))
+        if (savedPhotos) setCachedResults(JSON.parse(savedPhotos), savedPreviews ? JSON.parse(savedPreviews) : null)
         finishHydrating()
         return
       } catch {}
@@ -245,9 +241,7 @@ export default function Home() {
     setLoading(true)
     setStep('loading')
     setReport(null)
-    setInitialPhotoResults(null)
-    setInitialPhotoPreviews(null)
-    setPhotoError(false)
+    resetPhotoState()
 
     const plan = planOverride || activePlan
     // Check for user-uploaded photos
@@ -271,88 +265,25 @@ export default function Home() {
       if (plan === 'full-audit') {
         // Check if Supabase cached report already includes photo results
         if (data.cachedPhotoResults) {
-          setInitialPhotoResults(data.cachedPhotoResults)
-          if (data.cachedPhotoPreviews) setInitialPhotoPreviews(data.cachedPhotoPreviews)
+          setCachedResults(data.cachedPhotoResults, data.cachedPhotoPreviews)
           savePhotoResultsToStorage(data.cachedPhotoResults, data.cachedPhotoPreviews)
         } else {
-          try {
-            const listingContext = {
+          const result = await analyzePhotos({
+            sessionId,
+            uploadId: uploadId || null,
+            photoUrls: data.photoUrls,
+            listingContext: {
               title: data.summary || '',
               amenities: data.topAmenities || [],
               missingPhotos: data.missingPhotos || [],
-            }
-
-            let photoRes: Response | null = null
-            const isReaccess = !!payload.reaccess
-
-            // Priority 1: Try server-side photo store (user uploaded before payment)
-            const cacheInfo = { listingUrl: data.listingUrl || '', plan }
-            if (uploadId) {
-              photoRes = await fetch('/api/analyze-photos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uploadId, sessionId, listingContext, reaccess: isReaccess, ...cacheInfo }),
-              })
-            }
-
-            // Priority 2: If server photos expired, try IndexedDB
-            if ((!photoRes || (!photoRes.ok && photoRes.status === 410)) && hasUserPhotos) {
-              console.warn('[analyze] Trying IndexedDB fallback...')
-              const savedFiles = await getPendingPhotos()
-              if (savedFiles?.length) {
-                const form = new FormData()
-                savedFiles.forEach(f => form.append('photos', f))
-                form.append('sessionId', sessionId || '')
-                form.append('listingContext', JSON.stringify(listingContext))
-                form.append('listingUrl', cacheInfo.listingUrl)
-                form.append('plan', plan)
-                photoRes = await fetch('/api/analyze-photos', { method: 'POST', body: form })
-              }
-            }
-
-            // Priority 3: Auto-analyze listing photos from scraper
-            if (!photoRes && data.photoUrls?.length) {
-              photoRes = await fetch('/api/analyze-photos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ photoUrls: data.photoUrls, sessionId, listingContext, reaccess: isReaccess, ...cacheInfo }),
-              })
-            }
-
-            if (photoRes) {
-              const photoData = await photoRes.json()
-              if (photoRes.ok) {
-                setInitialPhotoResults(photoData)
-                let photoPreviews: string[] | null = null
-                if (photoData.previews) {
-                  photoPreviews = photoData.previews
-                  setInitialPhotoPreviews(photoData.previews)
-                } else if (hasUserPhotos) {
-                  const savedFiles = await getPendingPhotos()
-                  if (savedFiles?.length) {
-                    photoPreviews = await Promise.all(savedFiles.map(f =>
-                      new Promise<string>(resolve => {
-                        const reader = new FileReader()
-                        reader.onload = () => resolve(reader.result as string)
-                        reader.readAsDataURL(f)
-                      })
-                    ))
-                    setInitialPhotoPreviews(photoPreviews)
-                  }
-                }
-                savePhotoResultsToStorage(photoData, photoPreviews)
-                clearPendingPhotos()
-              } else {
-                console.warn('[analyze] Photo analysis failed:', photoData.error)
-                setPhotoError(true)
-              }
-            } else {
-              // No photo analysis was triggered (e.g. no photoUrls from scraper)
-              setPhotoError(true)
-            }
-          } catch (photoErr) {
-            console.warn('[analyze] Photo analysis error:', photoErr)
-            setPhotoError(true)
+            },
+            reaccess: !!payload.reaccess,
+            listingUrl: data.listingUrl || '',
+            plan,
+            indexedDbFallback: hasUserPhotos,
+          })
+          if (result) {
+            savePhotoResultsToStorage(result.results, result.previews)
           }
         }
       }
@@ -471,8 +402,7 @@ export default function Home() {
     setActivePlan('full-audit')
     setReport(DEMO_REPORT as ReportData)
     setStep('report')
-    setInitialPhotoResults(DEMO_PHOTO_RESULT)
-    setInitialPhotoPreviews(DEMO_PHOTO_PREVIEWS)
+    setCachedResults(DEMO_PHOTO_RESULT, DEMO_PHOTO_PREVIEWS)
   }
 
   function reset() {
@@ -484,8 +414,7 @@ export default function Home() {
     setActivePlan('quick-score')
     setStep('input')
     setPhotoUploadId(null)
-    setInitialPhotoResults(null)
-    setInitialPhotoPreviews(null)
+    resetPhotoState()
     localStorage.removeItem('listingiq_report')
     localStorage.removeItem('listingiq_plan')
     localStorage.removeItem('listingiq_url')
@@ -525,8 +454,8 @@ export default function Home() {
         plan={activePlan}
         isDemo={isDemo}
         listingUrl={url}
-        initialPhotoResults={initialPhotoResults}
-        initialPhotoPreviews={initialPhotoPreviews}
+        initialPhotoResults={photoResults}
+        initialPhotoPreviews={photoPreviews}
         onUpgrade={handleUpgradeToFullAudit}
         photoError={photoError}
       />
