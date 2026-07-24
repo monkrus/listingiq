@@ -146,9 +146,9 @@ export async function POST(req: NextRequest) {
     const originBlock = checkOrigin(req)
     if (originBlock) return originBlock
 
-    // Rate limit: 3 photo analyses per minute per IP
+    // Rate limit: 5 photo analyses per minute per IP
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-    const { limited } = rateLimit(ip, 3, 60_000)
+    const { limited } = rateLimit(ip, 5, 60_000)
     if (limited) {
       return NextResponse.json({ error: 'Too many requests. Please wait a minute and try again.' }, { status: 429 })
     }

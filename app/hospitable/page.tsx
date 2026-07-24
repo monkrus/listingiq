@@ -5,7 +5,7 @@ import Report from '../components/Report'
 import { ReportData } from '../lib/types'
 import PhotoUploadStep from '../components/PhotoUploadStep'
 import { usePhotoAnalysis } from '../lib/use-photo-analysis'
-import { compressAllForUpload } from '../lib/compress-for-upload'
+import { preparePhotosForUpload } from '../lib/compress-for-upload'
 
 const LOADING_STEPS = [
   'Reading listing details...',
@@ -305,10 +305,12 @@ export default function HospitablePage() {
   async function handlePhotosContinue(files: File[], _previews: string[]) {
     setPhotoUploading(true)
     try {
-      const compressed = await compressAllForUpload(files)
-      const form = new FormData()
-      compressed.forEach(f => form.append('photos', f))
-      const res = await fetch('/api/upload-photos', { method: 'POST', body: form })
+      const photos = await preparePhotosForUpload(files)
+      const res = await fetch('/api/upload-photos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photos }),
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Upload failed')
       setPhotoUploadId(data.uploadId)

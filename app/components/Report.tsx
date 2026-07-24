@@ -277,6 +277,11 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
               AI Photo Analysis
             </h3>
           </div>
+          {photoError && !photoResults && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-700">
+              Photo analysis failed — this can happen due to rate limiting or a temporary error. You can upload your photos below to try again, or reload the page.
+            </div>
+          )}
           <PhotoUploader
             listingContext={{
               title: d.summary,

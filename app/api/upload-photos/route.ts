@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/app/lib/rate-limit'
 import { checkOrigin } from '@/app/lib/check-origin'
 import { storePhotos } from '@/app/lib/photo-store'
-import { validateImageFile } from '@/app/lib/validate-image'
+import { validateBase64Image } from '@/app/lib/validate-image'
 
 export const runtime = 'nodejs'
+
+interface UploadPhoto {
+  base64: string
+  filename: string
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,45 +22,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests. Please wait a minute.' }, { status: 429 })
     }
 
-    const formData = await req.formData()
-    const files = formData.getAll('photos') as File[]
+    const body = await req.json() as { photos?: UploadPhoto[] }
+    const items = body.photos
 
-    if (!files.length) {
+    if (!items?.length) {
       return NextResponse.json({ error: 'No photos provided' }, { status: 400 })
     }
-    if (files.length > 10) {
+    if (items.length > 10) {
       return NextResponse.json({ error: 'Maximum 10 photos' }, { status: 400 })
     }
 
-    const MAX_FILE_SIZE = 4 * 1024 * 1024
-    const MAX_TOTAL_SIZE = 20 * 1024 * 1024
+    const MAX_BASE64_SIZE = 6 * 1024 * 1024 // ~4.5 MB decoded
+    const MAX_TOTAL_BASE64 = 30 * 1024 * 1024 // ~22 MB decoded
     let totalSize = 0
 
-    for (const file of files) {
-      if (file.size > MAX_FILE_SIZE) {
-        return NextResponse.json({ error: `${file.name} is too large (max 4 MB per photo).` }, { status: 400 })
+    const photos = items.map((item) => {
+      if (!item.base64 || typeof item.base64 !== 'string') {
+        throw new Error('Invalid photo data')
       }
-      totalSize += file.size
-    }
-    if (totalSize > MAX_TOTAL_SIZE) {
-      return NextResponse.json({ error: 'Total upload size exceeds 20 MB.' }, { status: 400 })
-    }
+      if (item.base64.length > MAX_BASE64_SIZE) {
+        throw new Error(`${item.filename || 'Photo'} is too large (max 4 MB per photo).`)
+      }
+      totalSize += item.base64.length
+      if (totalSize > MAX_TOTAL_BASE64) {
+        throw new Error('Total upload size exceeds 20 MB.')
+      }
 
-    // Validate magic bytes and convert to base64
-    const photos = await Promise.all(files.map(async (file) => {
-      let realType: string
-      try {
-        realType = await validateImageFile(file)
-      } catch (err) {
-        throw new Error(err instanceof Error ? err.message : `${file.name} is not a valid image`)
+      const realType = validateBase64Image(item.base64)
+      if (!realType) {
+        throw new Error(`${item.filename || 'Photo'} is not a valid image. Allowed: JPG, PNG, WebP`)
       }
-      const bytes = await file.arrayBuffer()
+
       return {
-        base64: Buffer.from(bytes).toString('base64'),
+        base64: item.base64,
         mediaType: realType,
-        filename: file.name,
+        filename: item.filename || 'photo.jpg',
       }
-    }))
+    })
 
     const uploadId = crypto.randomUUID()
     const stored = storePhotos(uploadId, photos)
@@ -66,6 +69,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ uploadId, photoCount: photos.length })
   } catch (err) {
     console.error('[upload-photos]', err)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+    const message = err instanceof Error ? err.message : 'Upload failed'
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }

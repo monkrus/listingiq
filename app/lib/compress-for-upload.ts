@@ -4,10 +4,9 @@ const MAX_DIMENSION = 1200
 
 /**
  * Compress an image file client-side using Canvas API.
- * Reduces upload payload to prevent HTTP/2 errors on large multipart uploads.
  * Output: JPEG at 85% quality, max 1200px on longest edge.
  */
-export function compressForUpload(file: File): Promise<File> {
+function compressForUpload(file: File): Promise<File> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
     const img = new Image()
@@ -49,7 +48,27 @@ export function compressForUpload(file: File): Promise<File> {
   })
 }
 
-/** Compress multiple files in parallel */
-export function compressAllForUpload(files: File[]): Promise<File[]> {
-  return Promise.all(files.map(compressForUpload))
+/** Convert a File to a base64 string (without the data: prefix) */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1]) // Strip "data:...;base64," prefix
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+/**
+ * Compress photos and convert to base64 for JSON upload.
+ * Avoids multipart FormData which causes HTTP/2 errors in Next.js standalone.
+ */
+export async function preparePhotosForUpload(files: File[]): Promise<{ base64: string; filename: string }[]> {
+  const compressed = await Promise.all(files.map(compressForUpload))
+  return Promise.all(compressed.map(async (file) => ({
+    base64: await fileToBase64(file),
+    filename: file.name,
+  })))
 }

@@ -377,7 +377,8 @@ test('analyze API mock report has valid structure', async ({ request }) => {
 
 test('upload-photos rejects empty request', async ({ request }) => {
   const res = await request.post('/api/upload-photos', {
-    multipart: { _empty: '' },
+    headers: { 'Content-Type': 'application/json' },
+    data: { photos: [] },
   })
   // Should fail with 400 or 500 (no photos)
   expect(res.status()).toBeGreaterThanOrEqual(400)
