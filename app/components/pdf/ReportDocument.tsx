@@ -154,7 +154,7 @@ function RowItems({ items, dotColor }: { items: string[]; dotColor: string }) {
   return (
     <>
       {items.map((t, i) => (
-        <View key={i} style={i === items.length - 1 ? s.rowItemLast : s.rowItem}>
+        <View key={i} style={i === items.length - 1 ? s.rowItemLast : s.rowItem} wrap={false}>
           <View style={[s.dot, { backgroundColor: dotColor }]} />
           <Text style={s.rowItemText}>{t}</Text>
         </View>
@@ -382,9 +382,12 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
 
           {/* Guest persona */}
           <SectionCard title="Guest persona match" score={d.personaScore}>
-            <View style={{ marginBottom: 10 }}>
-              <Text style={[s.rowItemText, { lineHeight: 1.6 }]}>
-                Primary guest type: <Text style={s.boldText}>{d.primaryPersona}</Text>
+            <View style={{ marginBottom: 10 }} wrap={false}>
+              <Text style={{ fontSize: 8, color: C.brand, lineHeight: 1.6 }}>
+                Primary guest type:
+              </Text>
+              <Text style={{ fontSize: 8, color: C.brand, lineHeight: 1.6, fontWeight: 700, marginTop: 2 }}>
+                {d.primaryPersona}
               </Text>
             </View>
             <RowItems items={d.personaProblems} dotColor={C.red} />
