@@ -262,7 +262,7 @@ export default function HospitablePage() {
       setReport(result.report as ReportData)
       // Photo analysis for Full Audit
       if (plan === 'full-audit') {
-        const savedUploadId = photoUploadId || localStorage.getItem('listingiq_pms_upload_id')
+        const savedUploadId = photoUploadId || localStorage.getItem('listingiq_pms_upload_id_hospitable')
         await analyzePhotos({
           sessionId,
           uploadId: savedUploadId,
@@ -273,7 +273,7 @@ export default function HospitablePage() {
             missingPhotos: result.report?.missingPhotos || [],
           },
         })
-        if (savedUploadId) localStorage.removeItem('listingiq_pms_upload_id')
+        if (savedUploadId) localStorage.removeItem('listingiq_pms_upload_id_hospitable')
       }
 
       if (stepTimerRef.current) clearInterval(stepTimerRef.current)
@@ -344,7 +344,7 @@ export default function HospitablePage() {
     if (!selectedId) return
 
     // Save uploadId so it's available after Stripe redirect or mock analysis
-    if (uploadId) localStorage.setItem('listingiq_pms_upload_id', uploadId)
+    if (uploadId) localStorage.setItem('listingiq_pms_upload_id_hospitable', uploadId)
 
     if (process.env.NEXT_PUBLIC_USE_MOCK_API === 'true') {
       runAnalysis(selectedId, '', plan)
