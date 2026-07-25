@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')
   if (sessionId) {
     const report = await getPmsReportBySession(sessionId)
+      // Fallback: email may pass reportId as sessionId when session_id is null
+      || await getPmsReport(sessionId)
     return NextResponse.json({ report: report || null })
   }
 

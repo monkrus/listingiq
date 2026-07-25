@@ -126,6 +126,7 @@ export default function HospitablePage() {
 
     // Email re-access: session_id without propertyId — load saved report
     if (sessionId && !propertyId) {
+      setLoading(true)
       fetch(`/api/integrations/reports?sessionId=${encodeURIComponent(sessionId)}`)
         .then(res => res.json())
         .then(data => {
@@ -133,9 +134,15 @@ export default function HospitablePage() {
             setReport(data.report.report_data as ReportData)
             setSelectedPlan((data.report.plan || 'quick-score') as 'quick-score' | 'full-audit')
             setStep('report')
+          } else {
+            setError('Report not found. It may have expired.')
+            setLoading(false)
           }
         })
-        .catch(() => {})
+        .catch(() => {
+          setError('Failed to load report.')
+          setLoading(false)
+        })
       window.history.replaceState({}, '', '/hospitable')
       return
     }
