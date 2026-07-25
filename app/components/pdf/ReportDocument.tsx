@@ -45,7 +45,7 @@ const s = StyleSheet.create({
     fontSize: 9,
     color: C.brand,
     paddingTop: 64,
-    paddingBottom: 64,
+    paddingBottom: 72,
     backgroundColor: '#F7F6F3',
   },
   header: {
@@ -136,7 +136,7 @@ function SectionCard({ title, score, children }: { title: string; score: number;
 
 function ProblemTags({ items }: { items: string[] }) {
   return (
-    <View style={s.tagRow}>
+    <View style={s.tagRow} wrap={false}>
       {items.map((t, i) => <View key={i} style={s.problemTag}><Text style={s.problemTagText}>{t}</Text></View>)}
     </View>
   )
@@ -144,7 +144,7 @@ function ProblemTags({ items }: { items: string[] }) {
 
 function ChipTags({ items }: { items: string[] }) {
   return (
-    <View style={s.tagRow}>
+    <View style={s.tagRow} wrap={false}>
       {items.map((t, i) => <View key={i} style={s.chipTag}><Text style={s.chipTagText}>{t}</Text></View>)}
     </View>
   )
@@ -266,7 +266,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
             <View style={s.priorityBox} minPresenceAhead={60}>
               <Text style={s.priorityTitle}>Priority action plan</Text>
               {d.priorityActions.map((a, i) => (
-                <View key={i} style={i === d.priorityActions.length - 1 ? s.priorityRowLast : s.priorityRow}>
+                <View key={i} style={i === d.priorityActions.length - 1 ? s.priorityRowLast : s.priorityRow} wrap={false}>
                   <Text style={s.priorityNum}>#{i + 1}</Text>
                   <Text style={s.priorityText}>{a}</Text>
                 </View>
@@ -279,7 +279,7 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
             <ProblemTags items={d.titleProblems} />
             <Text style={s.subLabel}>Suggested titles</Text>
             {d.titleSuggestions.map((t, i) => (
-              <View key={i} style={s.suggestionBox}><Text style={s.suggestionText}>{t}</Text></View>
+              <View key={i} style={s.suggestionBox} wrap={false}><Text style={s.suggestionText}>{t}</Text></View>
             ))}
           </SectionCard>
 
@@ -391,12 +391,12 @@ export function ReportDocument({ data: rawData, photoResults, photoPreviews, lis
               </Text>
             </View>
             <RowItems items={d.personaProblems} dotColor={C.red} />
-            <View style={s.suggestionBox}><Text style={s.suggestionText}>{d.personaSuggestion}</Text></View>
+            <View style={s.suggestionBox} wrap={false}><Text style={s.suggestionText}>{d.personaSuggestion}</Text></View>
           </SectionCard>
 
           {/* Competitor insight */}
           {d.competitorInsight && (
-            <View style={s.competitorBox}>
+            <View style={s.competitorBox} wrap={false}>
               <Text style={s.competitorTitle}>Best practices from top-performing listings</Text>
               <Text style={s.competitorText}>{d.competitorInsight}</Text>
             </View>

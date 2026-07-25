@@ -108,6 +108,9 @@ export default function HostexPage() {
           if (data.report) {
             setReport(data.report.report_data as ReportData)
             setSelectedPlan((data.report.plan || effectivePlan) as 'quick-score' | 'full-audit')
+            if (data.photoResults) {
+              setCachedResults(data.photoResults, data.photoPreviews)
+            }
             setStep('report')
           } else {
             runAnalysis(propertyId, sessionId, effectivePlan)
