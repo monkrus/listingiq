@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ReportData } from '@/app/lib/types'
 import { PhotoAnalysisResult } from '@/app/api/analyze-photos/route'
 import ScoreCircle from './ScoreCircle'
@@ -40,6 +40,36 @@ const RowItem = ({ text, color }: { text: string; color: 'red' | 'amber' | 'gree
       <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${dot}`} />
       <span>{text}</span>
     </div>
+  )
+}
+
+const CopyButton = ({ text, label = 'Copy' }: { text: string; label?: string }) => {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* clipboard API unavailable */ }
+  }, [text])
+  return (
+    <button
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1 text-[11px] text-stone-400 hover:text-stone-600 transition-colors px-1.5 py-0.5 rounded hover:bg-stone-100"
+      title={label}
+    >
+      {copied ? (
+        <>
+          <svg className="w-3.5 h-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+          <span className="text-green-500">Copied</span>
+        </>
+      ) : (
+        <>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+          <span>{label}</span>
+        </>
+      )}
+    </button>
   )
 }
 
@@ -197,7 +227,12 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
         <div className="mt-3">
           <div className="mb-3">{d.titleProblems.map((p, i) => <ProblemTag key={i} text={p} />)}</div>
           <p className="text-xs text-stone-600 uppercase tracking-wide mb-1">Suggested titles</p>
-          {d.titleSuggestions.map((t, i) => <SuggestionBox key={i} text={t} />)}
+          {d.titleSuggestions.map((t, i) => (
+            <div key={i} className="flex items-start justify-between gap-2">
+              <div className="flex-1"><SuggestionBox text={t} /></div>
+              <div className="mt-3 flex-shrink-0"><CopyButton text={t} /></div>
+            </div>
+          ))}
         </div>
       </ReportSection>
 
@@ -205,7 +240,10 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       <ReportSection title="Description quality" score={d.descriptionScore} defaultOpen>
         <div className="mt-3">
           <div className="mb-3">{d.descriptionProblems.map((p, i) => <ProblemTag key={i} text={p} />)}</div>
-          <p className="text-xs text-stone-600 uppercase tracking-wide mb-1">Suggested rewrite</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-stone-600 uppercase tracking-wide">Suggested rewrite</p>
+            <CopyButton text={d.descriptionRewrite} label="Copy description" />
+          </div>
           <p className="text-[11px] text-stone-500 mb-2">Review and edit [bracketed placeholders] before using.</p>
           <div className="bg-stone-50 border border-stone-200 rounded-xl px-5 py-4 my-3 text-sm text-stone-800 leading-relaxed whitespace-pre-line">
             {d.descriptionRewrite}
@@ -348,7 +386,10 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       {/* SEO */}
       <ReportSection title="Keywords & optimization tips" score={null} defaultOpen>
         <div className="mt-3">
-          <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Phrases your target guests search for</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-stone-600 uppercase tracking-wide">Phrases your target guests search for</p>
+            <CopyButton text={d.seoKeywords.join(', ')} label="Copy keywords" />
+          </div>
           <div className="mb-3 flex flex-wrap gap-1.5">{d.seoKeywords.map((k, i) => <Chip key={i} text={k} />)}</div>
           <p className="text-xs text-stone-500 mb-4 leading-relaxed">These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</p>
           <div className="border-t border-stone-100 pt-4">
