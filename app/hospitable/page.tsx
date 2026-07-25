@@ -600,6 +600,7 @@ export default function HospitablePage() {
                 {properties.map(prop => {
                   const badge = readinessLabel(prop.readiness)
                   const canAnalyze = prop.readiness !== 'insufficient'
+                  const existingReport = savedReports.find(r => String(r.property_id) === String(prop.id))
                   return (
                     <div
                       key={prop.id}
@@ -638,18 +639,40 @@ export default function HospitablePage() {
                             </span>
                           </div>
                         </div>
-                        <button
-                          onClick={() => handleAnalyzeClick(prop.id)}
-                          disabled={!canAnalyze}
-                          style={{ fontFamily: 'var(--font-syne)' }}
-                          className={`self-center px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${
-                            canAnalyze
-                              ? 'bg-stone-900 text-white hover:bg-stone-700'
-                              : 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                          }`}
-                        >
-                          Analyze
-                        </button>
+                        <div className="self-center flex flex-col items-center gap-1">
+                          {existingReport ? (
+                            <>
+                              <button
+                                onClick={() => viewSavedReport(existingReport)}
+                                style={{ fontFamily: 'var(--font-syne)' }}
+                                className="px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap bg-stone-900 text-white hover:bg-stone-700"
+                              >
+                                View Report
+                              </button>
+                              {canAnalyze && (
+                                <button
+                                  onClick={() => handleAnalyzeClick(prop.id)}
+                                  className="text-[10px] text-stone-400 hover:text-stone-600 underline"
+                                >
+                                  Re-analyze
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => handleAnalyzeClick(prop.id)}
+                              disabled={!canAnalyze}
+                              style={{ fontFamily: 'var(--font-syne)' }}
+                              className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap ${
+                                canAnalyze
+                                  ? 'bg-stone-900 text-white hover:bg-stone-700'
+                                  : 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                              }`}
+                            >
+                              Analyze
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {prop.readiness === 'insufficient' && prop.missing.length > 0 && (
                         <p className="text-[10px] text-red-500 mt-2">
