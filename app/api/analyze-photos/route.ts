@@ -253,7 +253,11 @@ export async function POST(req: NextRequest) {
       if (credit.cacheOnly) {
         const cached = await getCachedReportBySession(sessionId!)
         if (cached?.photoResults) {
-          return NextResponse.json(cached.photoResults)
+          // Include previews so PhotoUploader can display thumbnails on re-access
+          const cachedResponse = cached.photoPreviews
+            ? { ...cached.photoResults, previews: cached.photoPreviews }
+            : cached.photoResults
+          return NextResponse.json(cachedResponse)
         }
         console.error(`[photo-analyze] re-access cache miss for session=${sessionId} — refusing to re-bill, customer must contact support`)
         return NextResponse.json(

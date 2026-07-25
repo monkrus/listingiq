@@ -54,21 +54,13 @@ interface SavedReport {
 
 type Step = 'connect' | 'properties' | 'plan-select' | 'photos' | 'analyzing' | 'report'
 
-// Detect session_id in URL to avoid flashing connect page on email re-access
-function getInitialState(): { step: Step; loading: boolean } {
-  if (typeof window === 'undefined') return { step: 'connect', loading: false }
-  const params = new URLSearchParams(window.location.search)
-  if (params.get('session_id')) return { step: 'connect', loading: true }
-  return { step: 'connect', loading: false }
-}
-
 export default function HostexPage() {
-  const initial = getInitialState()
-  const [step, setStep] = useState<Step>(initial.step)
+  const [step, setStep] = useState<Step>('connect')
   const [connected, setConnected] = useState(false)
   const [tokenInput, setTokenInput] = useState('')
   const [properties, setProperties] = useState<Property[]>([])
-  const [loading, setLoading] = useState(initial.loading)
+  const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -135,6 +127,7 @@ export default function HostexPage() {
             if (data.photoResults) {
               setCachedResults(data.photoResults, data.photoPreviews)
             }
+            setLoading(false)
             setStep('report')
           } else {
             setError('Report not found. It may have expired.')
@@ -149,7 +142,8 @@ export default function HostexPage() {
       return
     }
 
-    // Try loading properties — if cookie exists, server will accept
+    // No session_id — normal page load
+    setReady(true)
     setConnected(true) // Optimistic; fetchProperties will reset if 401
   }, [])
 
@@ -459,6 +453,18 @@ export default function HostexPage() {
           }}
           photoError={photoError}
         />
+      </main>
+    )
+  }
+
+  // Wait for useEffect to process URL params before showing UI
+  if (!ready && step !== 'report' && step !== 'analyzing') {
+    return (
+      <main className="min-h-screen flex items-center justify-center" style={{ background: '#F7F6F3' }}>
+        <div className="text-center">
+          <div className="flex justify-center mb-4"><Logo size={40} /></div>
+          <div className="w-8 h-8 border-2 border-stone-200 border-t-stone-800 rounded-full animate-spin mx-auto" />
+        </div>
       </main>
     )
   }

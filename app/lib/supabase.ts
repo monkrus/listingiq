@@ -199,10 +199,23 @@ export async function updateCachedPhotos(sessionId: string, photoResults: object
     .eq('session_id', sessionId)
     .select('session_id')
   if (error) {
-    // Error-level log: silent failures here cause email re-access to show
-    // "Pending" / upload dropzone instead of the analyzed photos the customer paid for.
-    console.error(`[db] updateCachedPhotos FAILED for session=${sessionId}:`, error)
-    return false
+    // Combined update failed (possibly previews too large) — try saving just results
+    console.warn(`[db] updateCachedPhotos combined update failed for session=${sessionId}, retrying without previews:`, error)
+    const { data: retryData, error: retryError } = await db
+      .from('cached_reports')
+      .update({ photo_results: photoResults })
+      .eq('session_id', sessionId)
+      .select('session_id')
+    if (retryError) {
+      console.error(`[db] updateCachedPhotos FAILED (even without previews) for session=${sessionId}:`, retryError)
+      return false
+    }
+    if (!retryData || retryData.length === 0) {
+      console.error(`[db] updateCachedPhotos: no row found for session=${sessionId} — cacheReport was never called or was rolled back`)
+      return false
+    }
+    console.warn(`[db] updateCachedPhotos: saved results without previews for session=${sessionId}`)
+    return true
   }
   if (!data || data.length === 0) {
     // Row does not exist — this means analyze/route.ts either skipped cacheReport

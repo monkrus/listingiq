@@ -262,7 +262,10 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       {!hasPhotoAnalysis && (
         <ReportSection title="Photo tips" score={null}>
           <div className="mt-3">
-            <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Photos top-performing listings in your market include</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-stone-600 uppercase tracking-wide">Photos top-performing listings in your market include</p>
+              <CopyButton text={d.missingPhotos.join('\n')} label="Copy tips" />
+            </div>
             {d.missingPhotos.map((m, i) => <RowItem key={i} text={m} color="amber" />)}
             <p className="text-xs text-stone-600 italic mt-3">General recommendations based on your property type — upgrade to Full Audit for individual photo scoring, reorder suggestions, and retake instructions.</p>
           </div>
@@ -375,9 +378,12 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       {/* Competitor insight */}
       {d.competitorInsight && (
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 mb-4">
-          <h3 style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-blue-900 uppercase tracking-wide mb-2">
-            Best practices from top-performing listings
-          </h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-blue-900 uppercase tracking-wide">
+              Best practices from top-performing listings
+            </h3>
+            <CopyButton text={d.competitorInsight} label="Copy" />
+          </div>
           <p className="text-sm text-blue-900 leading-relaxed">{d.competitorInsight}</p>
         </div>
       )}

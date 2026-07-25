@@ -22,14 +22,20 @@ function ScoreBar({ score }: { score: number }) {
   )
 }
 
-function PhotoCard({ photo, preview }: { photo: PhotoVerdict; preview: string }) {
+function PhotoCard({ photo, preview }: { photo: PhotoVerdict; preview?: string }) {
   const [expanded, setExpanded] = useState(false)
   const c = VERDICT_COLORS[photo.verdict]
 
   return (
     <div className={`border rounded-2xl overflow-hidden ${c.border} ${c.bg}`}>
       <div className="relative">
-        <img src={preview} alt={photo.filename} className="w-full h-40 object-cover" />
+        {preview ? (
+          <img src={preview} alt={photo.filename} className="w-full h-40 object-cover" />
+        ) : (
+          <div className="w-full h-40 bg-stone-200 flex items-center justify-center text-stone-400 text-xs">
+            Photo {photo.index + 1}
+          </div>
+        )}
         <div className="absolute top-2 left-2 flex gap-1.5">
           <span className={`text-xs font-bold px-2 py-1 rounded-lg ${c.badge}`}>
             {VERDICT_LABELS[photo.verdict]}
@@ -115,8 +121,9 @@ async function hashFile(file: File): Promise<string> {
 }
 
 export default function PhotoUploader({ listingContext, onResults, onPreviews, initialResults, initialPreviews }: { listingContext?: ListingContext; onResults?: (r: PhotoAnalysisResult | null) => void; onPreviews?: (p: string[]) => void; initialResults?: PhotoAnalysisResult | null; initialPreviews?: string[] | null } = {}) {
-  const hasInitial = !!(initialResults && initialPreviews?.length)
-  const [previews, setPreviews] = useState<string[]>(hasInitial ? initialPreviews! : [])
+  // Show results if we have photo analysis data, even without preview images
+  const hasInitial = !!(initialResults)
+  const [previews, setPreviews] = useState<string[]>(hasInitial && initialPreviews?.length ? initialPreviews! : [])
   const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState<Step>(hasInitial ? 'results' : 'upload')
@@ -129,9 +136,9 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
 
   // Sync when initial props arrive after mount (e.g. async Supabase fetch on re-access)
   useEffect(() => {
-    if (initialResults && initialPreviews?.length) {
+    if (initialResults) {
       setResult(initialResults)
-      setPreviews(initialPreviews)
+      if (initialPreviews?.length) setPreviews(initialPreviews)
       setStep('results')
     }
   }, [initialResults, initialPreviews])
@@ -442,18 +449,28 @@ export default function PhotoUploader({ listingContext, onResults, onPreviews, i
                 Recommended gallery order
               </p>
               <p className="text-xs text-blue-800 mb-3">Drag your Airbnb photos into this order for best results:</p>
-              <div className="flex gap-2 overflow-x-auto pb-1 pt-2 pl-2">
-                {result.suggestedOrder.filter(idx => idx >= 0 && idx < previews.length).map((photoIndex, pos) => (
-                  <div key={pos} className="flex-shrink-0 text-center">
-                    <div className="relative">
-                      <img src={previews[photoIndex]} className="w-24 h-24 object-cover rounded-lg border border-blue-200" alt="" />
-                      <span className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                        {pos + 1}
-                      </span>
+              {previews.length > 0 ? (
+                <div className="flex gap-2 overflow-x-auto pb-1 pt-2 pl-2">
+                  {result.suggestedOrder.filter(idx => idx >= 0 && idx < previews.length).map((photoIndex, pos) => (
+                    <div key={pos} className="flex-shrink-0 text-center">
+                      <div className="relative">
+                        <img src={previews[photoIndex]} className="w-24 h-24 object-cover rounded-lg border border-blue-200" alt="" />
+                        <span className="absolute -top-1.5 -left-1.5 w-5 h-5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                          {pos + 1}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {result.suggestedOrder.map((photoIndex, pos) => (
+                    <span key={pos} className="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-lg font-medium">
+                      #{pos + 1}: Photo {photoIndex + 1}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
