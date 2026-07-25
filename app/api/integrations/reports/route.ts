@@ -28,10 +28,7 @@ export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')
   if (sessionId) {
     const report = await getPmsReportBySession(sessionId)
-    if (!report) {
-      return NextResponse.json({ error: 'Report not found' }, { status: 404 })
-    }
-    return NextResponse.json({ report })
+    return NextResponse.json({ report: report || null })
   }
 
   const platform = req.nextUrl.searchParams.get('platform') || undefined
