@@ -54,18 +54,27 @@ interface SavedReport {
 
 type Step = 'connect' | 'properties' | 'plan-select' | 'photos' | 'analyzing' | 'report'
 
+// Detect session_id in URL to avoid flashing connect page on email re-access
+function getInitialState(): { step: Step; loading: boolean } {
+  if (typeof window === 'undefined') return { step: 'connect', loading: false }
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('session_id')) return { step: 'connect', loading: true }
+  return { step: 'connect', loading: false }
+}
+
 export default function HostexPage() {
-  const [step, setStep] = useState<Step>('connect')
+  const initial = getInitialState()
+  const [step, setStep] = useState<Step>(initial.step)
   const [connected, setConnected] = useState(false)
   const [tokenInput, setTokenInput] = useState('')
   const [properties, setProperties] = useState<Property[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(initial.loading)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedPlan, setSelectedPlan] = useState<'quick-score' | 'full-audit'>('quick-score')
   const [report, setReport] = useState<ReportData | null>(null)
-  const { photoResults, photoPreviews, photoError, analyzePhotos, resetPhotoState } = usePhotoAnalysis()
+  const { photoResults, photoPreviews, photoError, analyzePhotos, setCachedResults, resetPhotoState } = usePhotoAnalysis()
   const [analyzingTitle, setAnalyzingTitle] = useState('')
   const [stepIndex, setStepIndex] = useState(-1)
   const stepTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -119,6 +128,10 @@ export default function HostexPage() {
           if (data.report) {
             setReport(data.report.report_data as ReportData)
             setSelectedPlan((data.report.plan || 'quick-score') as 'quick-score' | 'full-audit')
+            // Restore photo results if available from cached_reports
+            if (data.photoResults) {
+              setCachedResults(data.photoResults, data.photoPreviews)
+            }
             setStep('report')
           } else {
             setError('Report not found. It may have expired.')

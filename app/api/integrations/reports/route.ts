@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPmsReports, getPmsReport, getPmsReportBySession, clearPmsReports } from '@/app/lib/pms-reports'
+import { getCachedReportBySession } from '@/app/lib/supabase'
 import { rateLimit } from '@/app/lib/rate-limit'
 
 /**
@@ -30,7 +31,13 @@ export async function GET(req: NextRequest) {
     const report = await getPmsReportBySession(sessionId)
       // Fallback: email may pass reportId as sessionId when session_id is null
       || await getPmsReport(sessionId)
-    return NextResponse.json({ report: report || null })
+    // Also fetch photo results from cached_reports if available
+    const cached = await getCachedReportBySession(sessionId)
+    return NextResponse.json({
+      report: report || null,
+      photoResults: cached?.photoResults || null,
+      photoPreviews: cached?.photoPreviews || null,
+    })
   }
 
   const platform = req.nextUrl.searchParams.get('platform') || undefined

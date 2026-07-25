@@ -214,9 +214,12 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       {/* Priority actions */}
       {d.priorityActions?.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-4">
-          <h3 style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-amber-900 uppercase tracking-wide mb-3">
-            Priority action plan
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 style={{ fontFamily: 'var(--font-syne)' }} className="text-sm font-bold text-amber-900 uppercase tracking-wide">
+              Priority action plan
+            </h3>
+            <CopyButton text={d.priorityActions.map((a, i) => `${i + 1}. ${a}`).join('\n')} label="Copy actions" />
+          </div>
           {d.priorityActions.map((a, i) => (
             <div key={i} className="flex items-start gap-3 py-2 border-b border-amber-200 last:border-0 text-sm text-amber-900">
               <span style={{ fontFamily: 'var(--font-syne)' }} className="font-bold text-amber-600 flex-shrink-0">#{i + 1}</span>
@@ -343,7 +346,10 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       {/* Amenities */}
       <ReportSection title="Amenity strength" score={d.amenityScore}>
         <div className="mt-3">
-          <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Your strongest amenities</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-stone-600 uppercase tracking-wide">Your strongest amenities</p>
+            <CopyButton text={[...d.topAmenities.map(a => `+ ${a}`), ...d.amenityGaps.map(a => `- Consider: ${a}`)].join('\n')} label="Copy amenities" />
+          </div>
           <div className="mb-3 flex flex-wrap gap-1.5">{d.topAmenities.map((a, i) => <Chip key={i} text={a} />)}</div>
           {d.amenityGaps.length > 0 && (
             <>
@@ -357,7 +363,10 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       {/* Guest persona */}
       <ReportSection title="Guest persona match" score={d.personaScore}>
         <div className="mt-3">
-          <p className="text-sm mb-3">Primary guest type: <strong>{d.primaryPersona}</strong></p>
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <p className="text-sm">Primary guest type: <strong>{d.primaryPersona}</strong></p>
+            <div className="flex-shrink-0"><CopyButton text={`Primary guest type: ${d.primaryPersona}\n\nProblems:\n${d.personaProblems.map(p => `- ${p}`).join('\n')}\n\nSuggestion:\n${d.personaSuggestion}`} label="Copy persona" /></div>
+          </div>
           <div className="mb-3">{d.personaProblems.map((p, i) => <RowItem key={i} text={p} color="red" />)}</div>
           <SuggestionBox text={d.personaSuggestion} />
         </div>
@@ -376,7 +385,10 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
       {/* Reviews */}
       <ReportSection title="Review sentiment" score={d.reviewScore}>
         <div className="mt-3">
-          <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Review highlights</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-stone-600 uppercase tracking-wide">Review highlights</p>
+            <CopyButton text={[`Highlights: ${d.guestLoves.join(', ')}`, ...d.reviewRisks.map(r => `Risk: ${r}`)].join('\n')} label="Copy reviews" />
+          </div>
           <div className="mb-3 flex flex-wrap gap-1.5">{d.guestLoves.map((g, i) => <Chip key={i} text={g} />)}</div>
           {d.reviewRisks.length > 0 && (
             <>
@@ -397,7 +409,10 @@ export default function Report({ data: rawData, onReset, plan = 'quick-score', i
           <div className="mb-3 flex flex-wrap gap-1.5">{d.seoKeywords.map((k, i) => <Chip key={i} text={k} />)}</div>
           <p className="text-xs text-stone-500 mb-4 leading-relaxed">These help you understand your audience and use natural language in your listing. Airbnb ranks listings primarily by response rate, reviews, pricing, and listing completeness — not keyword density.</p>
           <div className="border-t border-stone-100 pt-4">
-            <p className="text-xs text-stone-600 uppercase tracking-wide mb-2">Listing optimization tips</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-stone-600 uppercase tracking-wide">Listing optimization tips</p>
+              <CopyButton text={d.conversionTips.map((t, i) => `${i + 1}. ${t}`).join('\n')} label="Copy tips" />
+            </div>
           </div>
           {d.conversionTips.map((t, i) => <RowItem key={i} text={t} color="green" />)}
         </div>
