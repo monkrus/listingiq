@@ -379,13 +379,18 @@ export default function HospitablePage() {
   }
 
   async function disconnect() {
-    await fetch('/api/integrations/hospitable/disconnect', { method: 'POST' })
+    try {
+      await fetch('/api/integrations/hospitable/disconnect', { method: 'POST' })
+    } catch {
+      // Continue with local cleanup even if server request fails
+    }
     localStorage.removeItem('pms_email_hospitable')
     setConnected(false)
     setProperties([])
     setReport(null)
     resetPhotoState()
     setSavedReports([])
+    setIsUpgrade(false)
     setStep('connect')
     setError('')
   }
@@ -576,9 +581,13 @@ export default function HospitablePage() {
                     <button
                       onClick={async () => {
                         if (!confirm('Clear all report history?')) return
-                        await fetch('/api/integrations/reports?platform=hospitable', { method: 'DELETE' })
-                        setSavedReports([])
-                        setShowHistory(false)
+                        try {
+                          await fetch('/api/integrations/reports?platform=hospitable', { method: 'DELETE' })
+                          setSavedReports([])
+                          setShowHistory(false)
+                        } catch {
+                          setError('Failed to clear history. Please try again.')
+                        }
                       }}
                       className="text-xs text-red-400 hover:text-red-600 underline"
                     >

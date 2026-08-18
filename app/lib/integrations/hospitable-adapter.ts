@@ -23,6 +23,7 @@
 
 import type { ListingInput } from '../types'
 import { getHospitableConnection, updateHospitableTokens } from '../supabase'
+import { logger } from '../logger'
 
 // ---- Config ----
 const BASE_URL = 'https://public.api.hospitable.com/v2'
@@ -77,7 +78,7 @@ export async function resolveToken(connectionId: string): Promise<string> {
 
   if (!res.ok) {
     const body = await res.text()
-    console.error('[hospitable] Token refresh failed:', res.status, body)
+    logger.error('hospitable', 'token_refresh_failed', { status: res.status, body })
     throw new Error('Hospitable session expired. Please reconnect.')
   }
 
@@ -315,7 +316,7 @@ export async function fetchHospitableListingInputs(opts: FetchOptions): Promise<
         reviews = await getPropertyReviews(opts.token, uuid)
       } catch (err) {
         // Reviews may fail (permissions, scope) — continue without them
-        console.warn(`[hospitable] Failed to fetch reviews for ${uuid}:`, err)
+        logger.warn('hospitable', 'reviews_fetch_failed', { propertyId: uuid, error: String(err) })
       }
     }
 

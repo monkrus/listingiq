@@ -343,6 +343,18 @@ export async function updateHospitableTokens(
   return true
 }
 
+/** Delete a Hospitable connection by ID. */
+export async function deleteHospitableConnection(connectionId: string): Promise<boolean> {
+  const db = getSupabaseAdmin()
+  if (!db) return false
+  const { error } = await db
+    .from('hospitable_connections')
+    .delete()
+    .eq('connection_id', connectionId)
+  if (error) { console.error('[db] deleteHospitableConnection:', error); return false }
+  return true
+}
+
 // ---- Hostex API token storage ----
 
 /** Save a Hostex API token; returns the connection_id (UUID). */

@@ -24,7 +24,16 @@ export async function POST(req: NextRequest) {
   }
 
   const connectionId = req.cookies.get('hospitable_connection_id')?.value
-  const { plan, propertyId, sessionId } = await req.json()
+
+  let plan: string | undefined, propertyId: string | undefined, sessionId: string | undefined
+  try {
+    const body = await req.json()
+    plan = body.plan
+    propertyId = body.propertyId
+    sessionId = body.sessionId
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
 
   if (!connectionId) {
     return NextResponse.json({ error: 'Not connected. Please connect your Hospitable account.' }, { status: 401 })
@@ -108,7 +117,7 @@ export async function POST(req: NextRequest) {
       // Persist the report
       const reportId = await savePmsReport({
         platform: 'hospitable',
-        connectionId: connectionId || 'pat',
+        connectionId,
         propertyId: id,
         sessionId: sessionId || null,
         plan: effectivePlan,

@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { saveHospitableTokens } from '@/app/lib/supabase'
 import { findConnectionByPropertyIds } from '@/app/lib/pms-reports'
+import { logger } from '@/app/lib/logger'
 
 /**
  * Hospitable OAuth callback handler.
  *
+ * Two initiation paths:
+ * A) From ListingIQ (/api/hospitable/authorize) — state cookie is set, validated here (CSRF)
+ * B) From Hospitable Marketplace (one-click OAuth) — no state cookie exists, skip validation
+ *
  * Flow:
- * 1. User visits /api/hospitable/authorize -> redirected to Hospitable login
- * 2. After granting access, Hospitable redirects here with ?code=XXX&state=YYY
- * 3. Validate state against httpOnly cookie (CSRF protection)
+ * 1. Hospitable redirects here with ?code=XXX (and optionally &state=YYY)
+ * 2. If state cookie exists (path A), validate state matches (CSRF protection)
+ * 3. If no state cookie (path B / Hospitable-initiated), skip state check
  * 4. Exchange the code for an access_token + refresh_token
  * 5. Store tokens in Supabase, set connectionId in httpOnly cookie
  * 6. Redirect to /hospitable with a success flag (no sensitive data in URL)
@@ -32,14 +37,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(errorUrl)
   }
 
-  // CSRF: validate state matches httpOnly cookie
+  // CSRF: validate state when flow was initiated from ListingIQ (state cookie exists).
+  // When initiated from Hospitable Marketplace (one-click OAuth), no state cookie is set,
+  // so we skip validation — Hospitable is the trusted initiator in that case.
   const savedState = req.cookies.get('hospitable_oauth_state')?.value
-  if (!state || !savedState || state !== savedState) {
-    const errorUrl = new URL('/hospitable', BASE_URL)
-    errorUrl.searchParams.set('error', 'Invalid OAuth state. Please try connecting again.')
-    const response = NextResponse.redirect(errorUrl)
-    response.cookies.delete('hospitable_oauth_state')
-    return response
+  if (savedState) {
+    // Flow initiated from ListingIQ — state must match
+    if (!state || state !== savedState) {
+      const errorUrl = new URL('/hospitable', BASE_URL)
+      errorUrl.searchParams.set('error', 'Invalid OAuth state. Please try connecting again.')
+      const response = NextResponse.redirect(errorUrl)
+      response.cookies.delete('hospitable_oauth_state')
+      return response
+    }
   }
 
   if (!code) {
@@ -63,7 +73,7 @@ export async function GET(req: NextRequest) {
 
   if (!tokenRes.ok) {
     const body = await tokenRes.text()
-    console.error('[hospitable] Token exchange failed:', tokenRes.status, body)
+    logger.error('hospitable', 'token_exchange_failed', { status: tokenRes.status, body })
     const errorUrl = new URL('/hospitable', BASE_URL)
     errorUrl.searchParams.set('error', 'Token exchange failed. Please try again.')
     return NextResponse.redirect(errorUrl)
