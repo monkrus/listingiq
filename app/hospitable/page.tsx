@@ -91,6 +91,7 @@ export default function HospitablePage() {
     const connectedParam = params.get('connected')
     if (connectedParam === 'true') {
       setConnected(true)
+      setReady(true)
       window.history.replaceState({}, '', '/hospitable')
       return
     }
