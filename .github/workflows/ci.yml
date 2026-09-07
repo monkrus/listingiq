@@ -17,6 +17,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: rm package-lock.json && npm install
+      - run: npm ci
       - run: npx tsc --noEmit
       - run: npx vitest run
